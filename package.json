@@ -1,0 +1,32 @@
+{
+  "name": "azurance-llm",
+  "version": "0.1.0",
+  "description": "Install LLM-friendly Azurance API integration context into developer projects.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dadigitall/azurance-skills.git"
+  },
+  "bin": {
+    "azurance-llm": "./bin/azurance-llm.js"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "templates"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "azurance",
+    "llm",
+    "agents",
+    "api",
+    "erp"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,278 @@
+openapi: 3.1.0
+info:
+  title: AZURANCE ERP Provider API
+  version: 0.1.0
+  description: API externe sandbox pour ERP prestataires. Le BFF valide X-Api-Key via auth-service puis appelle les microservices internes.
+servers:
+  - url: https://provider-api.elenami.com
+    description: Production provider-api-bff
+  - url: https://provider-api-sandbox.elenami.com
+    description: Sandbox provider-api-bff
+  - url: http://localhost:3101
+    description: Sandbox local provider-api-bff
+security:
+  - ApiKeyAuth: []
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+  parameters:
+    RequestId:
+      in: header
+      name: X-Request-Id
+      required: false
+      schema:
+        type: string
+      description: Identifiant de corrélation propagé aux services internes.
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+    ApiKeyVerificationResponse:
+      type: object
+      required:
+        - valid
+        - environment
+        - tenant_uid
+        - tenant_slug
+        - tenant_name
+        - subject_type
+        - subject_uid
+        - subject_name
+        - scopes
+      properties:
+        valid:
+          type: boolean
+          example: true
+        environment:
+          type: string
+          enum: [sandbox, production]
+          example: sandbox
+        tenant_uid:
+          type: string
+          example: 40000000-0000-4000-8000-000000000001
+        tenant_slug:
+          type: string
+          example: nsia-ci
+        tenant_name:
+          type: string
+          example: NSIA Assurance CI
+        subject_type:
+          type: string
+          enum: [PROVIDER]
+          example: PROVIDER
+        subject_uid:
+          type: string
+          example: 30000000-0000-4000-8000-000000000002
+        subject_name:
+          type: string
+          example: Pharmacie du Plateau
+        scopes:
+          type: array
+          items:
+            type: string
+          example: [eligibility.check, claims.create, claims.view]
+paths:
+  /api/health:
+    get:
+      security: []
+      summary: Healthcheck BFF prestataire
+      responses:
+        '200':
+          description: OK
+  /api/v1/auth/verify:
+    get:
+      summary: Vérifier une clé API prestataire
+      description: Valide X-Api-Key et retourne le contexte lisible pour le bouton "Tester la connexion" côté ERP. Ne retourne jamais la clé brute ni son hash.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Clé valide et contexte résolu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyVerificationResponse'
+        '401':
+          description: API key absente, invalide ou révoquée
+        '403':
+          description: Clé non autorisée pour cette API ou cet environnement
+  /api/v1/eligibility/check:
+    post:
+      summary: Précheck d'éligibilité ERP sans création de claim
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, coverage_code]
+              properties:
+                identifier:
+                  type: string
+                coverage_code:
+                  type: string
+                amount:
+                  type: number
+                purpose:
+                  type: string
+                  enum: [PRECHECK, CLAIM_SUBMISSION]
+                service_date:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Résultat d'éligibilité
+        '401':
+          description: API key absente ou invalide
+        '403':
+          description: Scope insuffisant
+  /api/v1/media/uploads:
+    post:
+      summary: Upload de document clinique ou justificatif claim
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, category, purpose]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                category:
+                  type: string
+                purpose:
+                  type: string
+                external_reference:
+                  type: string
+                metadata:
+                  type: string
+      responses:
+        '201':
+          description: Média créé
+  /api/v1/claims:
+    post:
+      summary: Soumettre un claim après recheck final obligatoire
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subscription_id, policyholder_id, coverage_type_code, service_date, amount_claimed, currency, items]
+              properties:
+                subscription_id:
+                  type: string
+                policyholder_id:
+                  type: string
+                coverage_type_code:
+                  type: string
+                service_date:
+                  type: string
+                  format: date
+                amount_claimed:
+                  type: number
+                currency:
+                  type: string
+                  example: XOF
+                precheck_eligibility_uuid:
+                  type: string
+                  format: uuid
+                items:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        '201':
+          description: Claim créé
+        '422':
+          description: Check final refusé, aucun claim créé
+        '503':
+          description: Service interne indisponible, aucun claim créé
+    get:
+      summary: Lister les claims du prestataire lié à la clé API
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Liste paginée
+  /api/v1/payable-invoices:
+    get:
+      summary: Lister les bordereaux payables visibles par l'ERP prestataire
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Liste paginée
+  /api/v1/payments/{paymentId}:
+    get:
+      summary: Consulter un paiement
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - in: path
+          name: paymentId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paiement
+  /api/v1/billing/sync:
+    get:
+      summary: Flux incrémental ERP des événements billing
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - in: query
+          name: cursor
+          schema:
+            type: string
+        - in: query
+          name: updated_after
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Page de synchronisation
+  /api/v1/webhook-subscriptions:
+    post:
+      summary: Créer une souscription webhook ERP
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, target_url, secret, event_types]
+              properties:
+                name:
+                  type: string
+                target_url:
+                  type: string
+                  format: uri
+                secret:
+                  type: string
+                  minLength: 16
+                event_types:
+                  type: array
+                  items:
+                    type: string
+                is_active:
+                  type: boolean
+      responses:
+        '201':
+          description: Souscription créée

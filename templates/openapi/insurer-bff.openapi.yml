@@ -1,0 +1,201 @@
+openapi: 3.1.0
+info:
+  title: AZURANCE ERP Insurer API
+  version: 0.1.0
+  description: API externe sandbox pour ERP compagnies d'assurance. Le tenant assurance est dérivé de X-Api-Key, jamais du body ou query string.
+servers:
+  - url: https://insurer-api.elenami.com
+    description: Production insurer-bff
+  - url: https://insurer-api-sandbox.elenami.com
+    description: Sandbox insurer-bff
+  - url: http://localhost:3102
+    description: Sandbox local insurer-bff
+security:
+  - ApiKeyAuth: []
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+  parameters:
+    RequestId:
+      in: header
+      name: X-Request-Id
+      required: false
+      schema:
+        type: string
+  schemas:
+    ApiKeyVerificationResponse:
+      type: object
+      required:
+        - valid
+        - environment
+        - tenant_uid
+        - tenant_slug
+        - tenant_name
+        - subject_type
+        - subject_uid
+        - subject_name
+        - scopes
+      properties:
+        valid:
+          type: boolean
+          example: true
+        environment:
+          type: string
+          enum: [sandbox, production]
+          example: sandbox
+        tenant_uid:
+          type: string
+          example: 40000000-0000-4000-8000-000000000001
+        tenant_slug:
+          type: string
+          example: nsia-ci
+        tenant_name:
+          type: string
+          example: NSIA Assurance CI
+        subject_type:
+          type: string
+          enum: [INSURER]
+          example: INSURER
+        subject_uid:
+          type: string
+          example: 40000000-0000-4000-8000-000000000001
+        subject_name:
+          type: string
+          example: NSIA Assurance CI
+        scopes:
+          type: array
+          items:
+            type: string
+          example: [insurer.members.manage, insurer.claims.view]
+paths:
+  /api/v1/health:
+    get:
+      security: []
+      summary: Healthcheck BFF assurance
+      responses:
+        '200':
+          description: OK
+  /api/v1/auth/verify:
+    get:
+      summary: Vérifier une clé API assureur
+      description: Valide X-Api-Key et retourne le contexte lisible pour le bouton "Tester la connexion" côté ERP. Ne retourne jamais la clé brute ni son hash.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Clé valide et contexte résolu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyVerificationResponse'
+        '401':
+          description: API key absente, invalide ou révoquée
+        '403':
+          description: Clé non autorisée pour cette API ou cet environnement
+  /api/v1/claims/stats:
+    get:
+      summary: Statistiques claims du tenant assurance résolu par API key
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Statistiques
+        '401':
+          description: API key absente ou invalide
+        '403':
+          description: Scope insuffisant
+  /api/v1/claims:
+    get:
+      summary: Lister les claims du tenant assurance
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: provider_uid
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Liste paginée
+  /api/v1/claims/{claimId}:
+    get:
+      summary: Consulter un claim du tenant assurance
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - in: path
+          name: claimId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Claim
+  /api/v1/claims/{claimId}/status:
+    put:
+      summary: Mettre à jour le statut d'un claim
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - in: path
+          name: claimId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [UNDER_REVIEW, APPROVED, REJECTED, PAID]
+                reason:
+                  type: string
+                rejection_reason:
+                  type: string
+                reviewer_notes:
+                  type: string
+                reviewed_by:
+                  type: string
+      responses:
+        '200':
+          description: Claim mis à jour
+  /api/v1/eligibility/check:
+    post:
+      summary: Vérifier l'éligibilité depuis l'ERP assurance
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Résultat d'éligibilité
+  /api/v1/plans:
+    get:
+      summary: Lister les plans du tenant assurance
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Liste des plans
+    post:
+      summary: Créer un plan
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '201':
+          description: Plan créé
+  /api/v1/providers:
+    get:
+      summary: Lister les prestataires du réseau tenant
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Liste des prestataires
