@@ -1,21 +1,29 @@
 # Azurance LLM Context
 
-Azurance exposes public BFF APIs for ERP integrations in healthcare and insurance workflows. Internal microservices and old direct routes are not part of the public contract.
+Azurance expose deux APIs publiques pour les intégrations ERP dans les domaines santé et assurance. Seuls les endpoints documentés dans ce kit et dans les contrats OpenAPI font partie du contrat public.
 
-## Public API surfaces
+## Surfaces API publiques
 
 | Surface | Production | Sandbox |
 | --- | --- | --- |
 | ERP Prestataires | `https://provider-api.elenami.com` | `https://provider-api-sandbox.elenami.com` |
 | ERP Assurances | `https://insurer-api.elenami.com` | `https://insurer-api-sandbox.elenami.com` |
 
-All public APIs are versioned under `/api/v1`, except documented health endpoints.
+Toutes les APIs publiques sont versionnées sous `/api/v1`, hors endpoints de health documentés. Le contrat HTTP est identique entre sandbox et production. La clé API porte son environnement et ne peut pas être utilisée sur l'autre environnement.
 
-## Authentication
+## Authentification
 
-Use `X-Api-Key` for every partner API call. The key resolves the partner, tenant, environment, scopes, and subject context.
+`X-Api-Key` est le seul header public d'authentification. La clé résout l'organisation, l'environnement, le partenaire et les scopes autorisés.
 
-Common headers:
+Headers publics :
+
+| Header | Requis | Description |
+| --- | --- | --- |
+| `X-Api-Key` | Oui | Clé API partenaire fournie pendant l'onboarding. |
+| `X-Request-Id` | Non | Identifiant de corrélation fourni par l'ERP. Si absent, Azurance en génère un. |
+| `Idempotency-Key` | Sur création de ressource métier | Clé stable pour éviter les doublons sur retry. |
+| `Accept` | Recommandé | `application/json`. |
+| `Content-Type` | Requis avec body JSON | `application/json`. |
 
 ```http
 Accept: application/json
@@ -24,50 +32,105 @@ X-Api-Key: ${AZURANCE_API_KEY}
 X-Request-Id: erp-request-001
 ```
 
-Never use `X-Service-Key` in partner ERP code. That header is internal to Azurance service-to-service traffic.
+Ne jamais utiliser `X-Service-Key` dans le code ERP partenaire. Ce header n'est pas destiné aux intégrations partenaires.
 
-## Security rules for generated code
+## Règles de sécurité pour le code généré
 
-- Store API keys in server-side secrets or environment variables.
-- Use different keys and base URLs for sandbox and production.
-- Do not expose API keys in frontend JavaScript, mobile apps, logs, crash reports, or monitoring metadata.
-- Do not call internal Azurance microservices directly.
-- Do not send `tenant_id`, `tenant_uid`, `provider_uuid`, `provider_uid`, `insurer_uid`, or equivalent tenant context in public payloads.
+- Stocker les clés API dans des secrets serveur ou des variables d'environnement.
+- Utiliser des clés et base URLs différentes pour sandbox et production.
+- Ne pas exposer les clés API dans le frontend JavaScript, les apps mobiles, les logs, les crash reports ou les metadata de monitoring.
+- Ne pas appeler d'autres URLs Azurance que les domaines API publics documentés.
+- Ne pas envoyer `tenant_id`, `tenant_uid`, `provider_uuid`, `provider_uid`, `insurer_uid`, `insurer_uuid` ou équivalent dans les requêtes publiques : ces valeurs sont dérivées de `X-Api-Key`.
+- Les champs non documentés dans les requêtes publiques sont rejetés en `400`.
+- Tous les appels doivent être faits depuis un backend ERP ou un middleware serveur, jamais depuis un frontend ou une app mobile.
 
-## Identifiers
+## Idempotence
 
-Use public UUIDs and business identifiers:
+Les appels qui créent une ressource métier doivent envoyer `Idempotency-Key` :
 
-| Resource | Preferred identifiers |
+```http
+Idempotency-Key: erp-operation-2026-0001
+```
+
+Endpoints concernés côté prestataire :
+
+| Endpoint | Recommandation |
 | --- | --- |
-| Insured member | `uuid`, `policy_number` |
-| Subscription | `uuid`, `subscription_number` |
+| `POST /api/v1/service-executions` | Une clé stable par prestation réellement effectuée. |
+| `POST /api/v1/claims` | Une clé stable par claim ERP. |
+| `POST /api/v1/media/uploads` | Une clé stable par fichier si l'ERP supporte le retry d'upload. |
+
+Si la même clé est rejouée avec le même corps de requête, Azurance retourne la réponse initiale et peut ajouter `X-Idempotent-Replay: true`. Si le corps change, l'API retourne `409 IDEMPOTENCY_CONFLICT`.
+
+Utiliser aussi `provider_reference` comme référence métier unique par prestataire pour détecter les doublons indépendamment du transport HTTP.
+
+## Identifiants publics
+
+Utiliser des UUID et codes métier publics :
+
+| Ressource | Identifiant public recommandé |
+| --- | --- |
+| Membre assuré | `uuid`, `policy_number` |
+| Souscription | `uuid`, `subscription_number` |
 | Plan | `plan_code` |
-| Claim | public `uuid` or `claim_id` |
-| Payable invoice | `uuid` |
-| Payment | `uuid` |
-| Media | `media_uid` |
+| Claim | `uuid` ou `claim_id` public |
+| Bordereau payable | `uuid` |
+| Paiement | `uuid` |
+| Média | `media_uid` |
 
-Internal SQL IDs are not part of the public API contract.
+Les identifiants internes ne font pas partie du contrat public.
 
-## Data conventions
+## Pagination et synchronisation
 
-- Calendar dates: `YYYY-MM-DD`.
-- Timestamps: ISO 8601 UTC, for example `2026-05-15T09:30:00Z`.
-- Default currency in examples: `XOF`.
-- JSON endpoints use `application/json`.
-- Media uploads use `multipart/form-data` with `file` and business fields such as `category`, `purpose`, or `metadata`.
+Les listes supportent `page` et `per_page` lorsque la pagination classique est suffisante. Les flux de synchronisation ERP, notamment billing, utilisent aussi `cursor` et `updated_after`.
 
-## Error handling
+```http
+GET /api/v1/billing/sync?updated_after=2026-05-15T00:00:00Z&cursor=eyJpZCI6...
+```
 
-| HTTP status | Meaning | Integration behavior |
+## Conventions de données
+
+- Dates calendaires : `YYYY-MM-DD`.
+- Timestamps : ISO 8601 UTC, par exemple `2026-05-15T09:30:00Z`.
+- Montants : nombres décimaux dans la devise du contrat ou du bordereau.
+- Devise par défaut des exemples : `XOF`.
+- Endpoints JSON : `application/json`.
+- Uploads médias : `multipart/form-data` avec un champ `file` et des champs métier comme `category`, `purpose` ou `metadata`.
+
+## Gestion des erreurs
+
+| HTTP | Sens | Action ERP |
 | --- | --- | --- |
-| `400` | Invalid request or forbidden public context field | Fix payload; do not retry unchanged. |
-| `401` | API key missing, invalid, expired, or revoked | Fix or rotate the key. |
-| `403` | Missing scope | Request scope during onboarding. |
-| `404` | Public resource not found for this key tenant | Verify identifier and synchronization state. |
-| `422` | Business validation rejected | Show business reason and stop that workflow. |
-| `429` | Rate limit reached | Retry with progressive backoff. |
-| `5xx` | Azurance or downstream availability issue | Retry with idempotence and backoff. |
+| `400` | Requête invalide ou contexte public forcé | Corriger le corps. Ne pas réessayer tel quel. |
+| `401` | Clé API absente, invalide, expirée ou révoquée | Corriger ou rotater la clé. |
+| `403` | Scope manquant | Demander l'ajout du scope pendant l'onboarding. |
+| `404` | Ressource introuvable dans le périmètre de la clé | Vérifier l'UUID public ou la synchronisation ERP. |
+| `422` | Validation métier refusée | Afficher le motif métier et arrêter le workflow. |
+| `429` | Rate limit atteint | Réessayer avec backoff progressif. |
+| `5xx` | Indisponibilité Azurance ou provider aval | Réessayer avec idempotence et backoff. |
 
-Log HTTP status, endpoint, public resource IDs, error message, and `X-Request-Id`. Never log raw API keys.
+Headers de rate limit possibles : `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, `Retry-After`.
+
+Codes métier d'éligibilité courants : `MEMBER_NOT_FOUND`, `NO_ACTIVE_SUBSCRIPTION`, `SUBSCRIPTION_EXPIRED`, `SUBSCRIPTION_SUSPENDED`, `COVERAGE_NOT_INCLUDED`, `ANNUAL_LIMIT_REACHED`, `GLOBAL_LIMIT_EXCEEDED`, `COVERAGE_LIMIT_EXCEEDED`, `LIMIT_EXCEEDED`, `PROVIDER_NOT_IN_NETWORK`.
+
+Codes métier ERP prestataire : `REQUIRED_DOCUMENT_MISSING`, `DUPLICATE_PROVIDER_REFERENCE`, `IDEMPOTENCY_CONFLICT`, `CONSENT_SCOPE_MISSING`, `CONSENT_EXPIRED`.
+
+Journaliser `status`, `message`, `error_code`, `X-Request-Id` et `event_id` webhook. Ne jamais journaliser les secrets.
+
+## Webhooks
+
+Les ERP prestataires peuvent souscrire aux événements billing pour éviter le polling massif. Azurance signe chaque livraison avec :
+
+| Header | Description |
+| --- | --- |
+| `X-Azurance-Event-Id` | Identifiant idempotent de l'événement. |
+| `X-Azurance-Delivery-Timestamp` | Timestamp utilisé dans la signature. |
+| `X-Azurance-Signature` | Signature HMAC au format `sha256=<digest>`. |
+
+Le message signé est `{timestamp}.{raw_json_payload}`, le digest est `hex(hmac_sha256(webhook_secret, message))`.
+
+Anti-replay : refuser un timestamp trop ancien, stocker `X-Azurance-Event-Id` pour traiter chaque événement une seule fois, vérifier la signature sur le body brut avant parsing, retourner `2xx` rapidement après persistance locale, récupérer les détails lourds par API paginée ou via `/api/v1/billing/sync`.
+
+## Documentation publique
+
+La documentation complète et interactive est disponible sur https://dadigitall.mintlify.site. Les contrats OpenAPI dans `.azurance/llm/openapi/` sont la source de vérité pour les endpoints, schémas et exemples exacts.

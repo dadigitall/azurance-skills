@@ -39,8 +39,8 @@ AGENTS.md
     provider-api.md
     insurer-api.md
     openapi/
-      provider-api-bff.openapi.yml
-      insurer-bff.openapi.yml
+      provider-api.openapi.yml
+      insurer-api.openapi.yml
 ```
 
 `AGENTS.md` is the entrypoint for coding agents. It points agents to the Azurance context files and OpenAPI contracts.
@@ -50,9 +50,9 @@ AGENTS.md
 - Public Azurance API base URLs for sandbox and production.
 - Authentication rules using `X-Api-Key`.
 - Security constraints for keeping keys server-side.
-- ERP provider workflows for eligibility checks, claims, documents, billing sync, and webhooks.
-- ERP insurer workflows for plans, members, subscriptions, beneficiaries, eligibility, and claims.
-- OpenAPI contracts for exact endpoints, methods, headers, and schemas.
+- ERP provider workflows: auth, network, covered persons, consent, eligibility, prior authorizations, clinical context, prescriptions, medical records, media, service executions, claims, billing, webhooks, and reference data.
+- ERP insurer workflows: plans, coverage types, reimbursement, members, subscriptions, beneficiaries, eligibility, claims, fraud assessment, prior authorizations, provider network, billing, reference data, webhooks, analytics, and notifications.
+- OpenAPI contracts for exact endpoints, methods, headers, schemas, and examples.
 
 ## Supported AI Tools
 

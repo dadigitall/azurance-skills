@@ -25,8 +25,8 @@ test("installs complete context into an empty directory", async () => {
   await assertFileExists(path.join(dir, ".azurance/llm/context.md"));
   await assertFileExists(path.join(dir, ".azurance/llm/provider-api.md"));
   await assertFileExists(path.join(dir, ".azurance/llm/insurer-api.md"));
-  await assertFileExists(path.join(dir, ".azurance/llm/openapi/provider-api-bff.openapi.yml"));
-  await assertFileExists(path.join(dir, ".azurance/llm/openapi/insurer-bff.openapi.yml"));
+  await assertFileExists(path.join(dir, ".azurance/llm/openapi/provider-api.openapi.yml"));
+  await assertFileExists(path.join(dir, ".azurance/llm/openapi/insurer-api.openapi.yml"));
 });
 
 test("provider target excludes insurer files", async () => {
@@ -36,8 +36,8 @@ test("provider target excludes insurer files", async () => {
 
   await assertFileExists(path.join(dir, ".azurance/llm/provider-api.md"));
   await assertFileMissing(path.join(dir, ".azurance/llm/insurer-api.md"));
-  await assertFileExists(path.join(dir, ".azurance/llm/openapi/provider-api-bff.openapi.yml"));
-  await assertFileMissing(path.join(dir, ".azurance/llm/openapi/insurer-bff.openapi.yml"));
+  await assertFileExists(path.join(dir, ".azurance/llm/openapi/provider-api.openapi.yml"));
+  await assertFileMissing(path.join(dir, ".azurance/llm/openapi/insurer-api.openapi.yml"));
 });
 
 test("insurer target excludes provider files", async () => {
@@ -47,8 +47,8 @@ test("insurer target excludes provider files", async () => {
 
   await assertFileExists(path.join(dir, ".azurance/llm/insurer-api.md"));
   await assertFileMissing(path.join(dir, ".azurance/llm/provider-api.md"));
-  await assertFileExists(path.join(dir, ".azurance/llm/openapi/insurer-bff.openapi.yml"));
-  await assertFileMissing(path.join(dir, ".azurance/llm/openapi/provider-api-bff.openapi.yml"));
+  await assertFileExists(path.join(dir, ".azurance/llm/openapi/insurer-api.openapi.yml"));
+  await assertFileMissing(path.join(dir, ".azurance/llm/openapi/provider-api.openapi.yml"));
 });
 
 test("appends a managed Azurance section when AGENTS.md exists", async () => {
