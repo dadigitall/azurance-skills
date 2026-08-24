@@ -21,7 +21,7 @@ La production utilise `https://provider-api.elenami.com` avec une clé productio
 6. Créer le contexte clinique avec `POST /api/v1/encounters` si pertinent.
 7. Enregistrer la prestation effectuée avec `POST /api/v1/service-executions` (`Idempotency-Key`).
 8. Uploader les documents avec `POST /api/v1/media/uploads` (`multipart/form-data`).
-9. Soumettre le claim avec `POST /api/v1/claims` (`Idempotency-Key`).
+9. Créer puis soumettre le claim avec `POST /api/v1/claims/draft` et `POST /api/v1/claims/{claimId}/submit`.
 10. Suivre les remboursements avec `GET /api/v1/billing/sync` et les webhooks.
 
 ## Groupes d'endpoints
@@ -66,11 +66,11 @@ La production utilise `https://provider-api.elenami.com` avec une clé productio
 
 | Méthode | Chemin | Scope | Description |
 | --- | --- | --- | --- |
-| `POST` | `/api/v1/prior-authorizations` | `prior_authorizations.view` | Créer une demande d'autorisation préalable. |
+| `POST` | `/api/v1/prior-authorizations` | `prior_authorizations.create` | Créer une demande d'autorisation préalable. |
 | `GET` | `/api/v1/prior-authorizations` | `prior_authorizations.view` | Lister les autorisations préalables. |
 | `GET` | `/api/v1/prior-authorizations/{uid}` | `prior_authorizations.view` | Détail d'une autorisation. |
-| `POST` | `/api/v1/prior-authorizations/{uid}/documents` | `prior_authorizations.view` | Joindre un document à une autorisation. |
-| `POST` | `/api/v1/prior-authorizations/{uid}/cancel` | `prior_authorizations.view` | Annuler une autorisation. |
+| `POST` | `/api/v1/prior-authorizations/{uid}/documents` | `prior_authorizations.documents` | Joindre un document à une autorisation. |
+| `POST` | `/api/v1/prior-authorizations/{uid}/cancel` | `prior_authorizations.cancel` | Annuler une autorisation. |
 
 ### Contexte clinique
 
@@ -79,6 +79,8 @@ La production utilise `https://provider-api.elenami.com` avec une clé productio
 | `POST` | `/api/v1/encounters` | `clinical.encounters.manage` | Créer un encounter (consultation, hospitalisation…). |
 | `GET` | `/api/v1/encounters` | `clinical.encounters.view` | Lister les encounters. |
 | `GET` | `/api/v1/encounters/{encounterId}` | `clinical.encounters.view` | Détail d'un encounter. |
+| `POST` | `/api/v1/encounters/{encounterId}/diagnoses` | `clinical.encounters.manage` | Ajouter un diagnostic CIM-10 structuré. |
+| `GET` | `/api/v1/encounters/{encounterId}/diagnoses` | `clinical.encounters.view` | Lister les diagnostics structurés. |
 | `GET` | `/api/v1/encounters/{encounterId}/medical-acts` | `clinical.encounters.view` | Actes médicaux d'un encounter. |
 | `POST` | `/api/v1/encounters/{encounterId}/medical-acts` | `clinical.encounters.manage` | Ajouter un acte médical à un encounter. |
 | `POST` | `/api/v1/encounters/{encounterId}/documents` | `clinical.documents.attach` | Joindre un document à un encounter. |
@@ -196,7 +198,7 @@ La pré-vérification est informative, `read_only=true`, ne réserve aucun plafo
 
 ## Soumission de claim
 
-`POST /api/v1/claims` avec `Idempotency-Key`.
+Créez d'abord un brouillon avec `POST /api/v1/claims/draft`, puis soumettez-le avec `POST /api/v1/claims/{claimId}/submit` après les contrôles finaux.
 
 ```json
 {

@@ -20,7 +20,7 @@ La production utilise `https://insurer-api.elenami.com` avec une clé production
 5. Ajouter les bénéficiaires avec `POST /api/v1/subscriptions/{subscriptionUuid}/beneficiaries`.
 6. Tester l'éligibilité avec `POST /api/v1/eligibility/check` ou `POST /api/v1/eligibility/check-batch`.
 7. Suspendre, expirer ou renouveler les souscriptions avec `PATCH /api/v1/subscriptions/{subscriptionUuid}/status` et `POST /api/v1/subscriptions/{subscriptionUuid}/renew`.
-8. Traiter les claims avec `GET /api/v1/claims`, `GET /api/v1/claims/{claimId}` et `PATCH /api/v1/claims/{claimId}/status`.
+8. Traiter les claims avec `GET /api/v1/claims`, `GET /api/v1/claims/{claimId}`, `GET /api/v1/claims/{claimId}/clinical-context` et `PATCH /api/v1/claims/{claimId}/status`.
 9. Consulter le réseau prestataires, la facturation, les analytics et les notifications.
 
 ## Groupes d'endpoints
@@ -99,6 +99,7 @@ La production utilise `https://insurer-api.elenami.com` avec une clé production
 | `GET` | `/api/v1/claims/stats` | `insurer.claims.view` | Statistiques claims. |
 | `GET` | `/api/v1/claims` | `insurer.claims.view` | Lister les claims. |
 | `GET` | `/api/v1/claims/{claimId}` | `insurer.claims.view` | Détail d'un claim. |
+| `GET` | `/api/v1/claims/{claimId}/clinical-context` | `insurer.claims.view` | Contexte clinique, diagnostics et prescriptions liés au claim. |
 | `PATCH` | `/api/v1/claims/{claimId}/status` | `insurer.claims.manage` | Mettre à jour le statut d'un claim. |
 | `GET` | `/api/v1/claims/{claimId}/documents` | `insurer.claims.view` | Documents d'un claim. |
 

@@ -57,7 +57,7 @@ Endpoints concernés côté prestataire :
 | Endpoint | Recommandation |
 | --- | --- |
 | `POST /api/v1/service-executions` | Une clé stable par prestation réellement effectuée. |
-| `POST /api/v1/claims` | Une clé stable par claim ERP. |
+| `POST /api/v1/claims/draft` | Une clé stable par brouillon de claim ERP lorsque l'opération est rejouable. |
 | `POST /api/v1/media/uploads` | Une clé stable par fichier si l'ERP supporte le retry d'upload. |
 
 Si la même clé est rejouée avec le même corps de requête, Azurance retourne la réponse initiale et peut ajouter `X-Idempotent-Replay: true`. Si le corps change, l'API retourne `409 IDEMPOTENCY_CONFLICT`.
@@ -114,6 +114,13 @@ Headers de rate limit possibles : `X-RateLimit-Limit`, `X-RateLimit-Remaining`, 
 Codes métier d'éligibilité courants : `MEMBER_NOT_FOUND`, `NO_ACTIVE_SUBSCRIPTION`, `SUBSCRIPTION_EXPIRED`, `SUBSCRIPTION_SUSPENDED`, `COVERAGE_NOT_INCLUDED`, `ANNUAL_LIMIT_REACHED`, `GLOBAL_LIMIT_EXCEEDED`, `COVERAGE_LIMIT_EXCEEDED`, `LIMIT_EXCEEDED`, `PROVIDER_NOT_IN_NETWORK`.
 
 Codes métier ERP prestataire : `REQUIRED_DOCUMENT_MISSING`, `DUPLICATE_PROVIDER_REFERENCE`, `IDEMPOTENCY_CONFLICT`, `CONSENT_SCOPE_MISSING`, `CONSENT_EXPIRED`.
+
+## Règles cliniques récentes
+
+- `POST /api/v1/encounters` doit contenir au moins un élément de diagnostic : `icd10_codes` avec au moins un code, ou `chief_complaint` non vide. Les deux champs peuvent être envoyés ensemble.
+- Les diagnostics structurés d'une consultation se gèrent avec `POST /api/v1/encounters/{encounterId}/diagnoses` (`clinical.encounters.manage`) et se lisent avec `GET /api/v1/encounters/{encounterId}/diagnoses` (`clinical.encounters.view`). Un diagnostic accepte `icd10_code`, `is_primary` et `diagnosis_type` (`definitive`, `provisional`, `differential`).
+- Pour une revue côté assureur, `GET /api/v1/claims/{claimId}/clinical-context` (`insurer.claims.view`) retourne les consultations, diagnostics et prescriptions rattachés aux prescriptions des lignes du claim. Les éléments non retrouvés sont signalés dans `warnings`.
+- Une décision de pré-autorisation côté assureur utilise `POST /api/v1/prior-authorizations/{uid}/decision` avec le scope `insurer.prior_authorizations.manage`.
 
 Journaliser `status`, `message`, `error_code`, `X-Request-Id` et `event_id` webhook. Ne jamais journaliser les secrets.
 
