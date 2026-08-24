@@ -1,0 +1,11 @@
+---
+description: Azurance API integration rules and contract lookup
+globs:
+alwaysApply: false
+---
+
+<!-- azurance-llm:start -->
+# Azurance API
+
+For Azurance provider or insurer API work, use the installed `azurance-api` skill when available. Otherwise read `.azurance/llm/context.md` and the relevant provider/insurer reference before changing integration code. Consult the matching OpenAPI contract for exact paths, scopes, payloads, and responses. Keep API keys server-side and test against sandbox first.
+<!-- azurance-llm:end -->

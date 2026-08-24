@@ -1,0 +1,6 @@
+interface:
+  display_name: "Azurance API"
+  short_description: "Integrate with Azurance provider and insurer APIs"
+  default_prompt: "Use $azurance-api to implement or review this Azurance API integration. Read the relevant references first and verify scopes, contracts, and tests."
+policy:
+  allow_implicit_invocation: true
