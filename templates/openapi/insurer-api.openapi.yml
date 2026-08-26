@@ -4663,6 +4663,76 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v1/claims/{claimId}/documents/{mediaUid}/download:
+    get:
+      operationId: downloadClaimDocument
+      summary: Télécharger le binaire d'un document de claim
+      description: |
+        Télécharge le contenu binaire d'un document attaché à un claim
+        (facture, prescription, rapport médical, résultat de laboratoire).
+        L'assureur ne peut télécharger que les documents des claims qui
+        appartiennent à son tenant (vérification `insurer_tenant_uid`).
+        La réponse est un flux binaire, pas du JSON.
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      - $ref: '#/components/parameters/ClaimId'
+      - in: path
+        name: mediaUid
+        required: true
+        description: UID du média tel que retourné par `GET /api/v1/claims/{claimId}/documents`.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Fichier binaire.
+          headers:
+            Content-Type:
+              description: Type MIME réel du fichier (application/pdf, image/jpeg, image/png...).
+              schema:
+                type: string
+            Content-Length:
+              description: Taille du fichier en octets.
+              schema:
+                type: integer
+            Content-Disposition:
+              description: Nom de fichier suggéré pour le téléchargement.
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: En-tête `X-Api-Key` manquant ou invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '403':
+          description: Scope `insurer.claims.view` manquant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '404':
+          description: Claim ou document introuvable pour ce tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/plans:
     get:
       operationId: listPlans

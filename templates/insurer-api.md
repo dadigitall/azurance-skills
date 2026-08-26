@@ -102,6 +102,7 @@ La production utilise `https://insurer-api.elenami.com` avec une clé production
 | `GET` | `/api/v1/claims/{claimId}/clinical-context` | `insurer.claims.view` | Contexte clinique, diagnostics et prescriptions liés au claim. |
 | `PATCH` | `/api/v1/claims/{claimId}/status` | `insurer.claims.manage` | Mettre à jour le statut d'un claim. |
 | `GET` | `/api/v1/claims/{claimId}/documents` | `insurer.claims.view` | Documents d'un claim. |
+| `GET` | `/api/v1/claims/{claimId}/documents/{mediaUid}/download` | `insurer.claims.view` | Télécharger le binaire d'un document de claim. |
 | `GET` | `/api/v1/claims/{claimId}/clinical-context` | `insurer.claims.view` | Contexte clinique pour la revue d'un claim (encounters, diagnostics, prescriptions). |
 
 ### Fraud assessment
