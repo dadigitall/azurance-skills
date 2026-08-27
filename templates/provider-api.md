@@ -79,6 +79,7 @@ La production utilise `https://provider-api.elenami.com` avec une clé productio
 | `POST` | `/api/v1/encounters` | `clinical.encounters.manage` | Créer un encounter (consultation, hospitalisation…). |
 | `GET` | `/api/v1/encounters` | `clinical.encounters.view` | Lister les encounters. |
 | `GET` | `/api/v1/encounters/{encounterId}` | `clinical.encounters.view` | Détail d'un encounter. |
+| `PATCH` | `/api/v1/encounters/{encounterId}` | `clinical.encounters.manage` | Mettre à jour un encounter (discharge_date, clinical_summary, icd10_codes, statut). |
 | `POST` | `/api/v1/encounters/{encounterId}/diagnoses` | `clinical.encounters.manage` | Ajouter un diagnostic CIM-10 structuré. |
 | `GET` | `/api/v1/encounters/{encounterId}/diagnoses` | `clinical.encounters.view` | Lister les diagnostics structurés. |
 | `GET` | `/api/v1/encounters/{encounterId}/medical-acts` | `clinical.encounters.view` | Actes médicaux d'un encounter. |
