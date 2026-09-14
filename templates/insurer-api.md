@@ -176,10 +176,12 @@ Le flux de paiement est obligatoire pour marquer un claim comme payé. Le statut
 
 | Méthode | Chemin | Scope | Description |
 | --- | --- | --- | --- |
-| `GET` | `/api/v1/webhooks` | — | Lister les souscriptions webhook. |
-| `POST` | `/api/v1/webhooks` | — | Créer une souscription webhook. |
-| `PATCH` | `/api/v1/webhooks/{uuid}` | — | Mettre à jour une souscription. |
-| `DELETE` | `/api/v1/webhooks/{uuid}` | — | Supprimer une souscription. |
+| `GET` | `/api/v1/webhooks` | `insurer.webhooks.view` | Lister les souscriptions webhook. |
+| `POST` | `/api/v1/webhooks` | `insurer.webhooks.manage` | Créer une souscription webhook. |
+| `PATCH` | `/api/v1/webhooks/{uuid}` | `insurer.webhooks.manage` | Mettre à jour une souscription. |
+| `DELETE` | `/api/v1/webhooks/{uuid}` | `insurer.webhooks.manage` | Supprimer une souscription. |
+| `GET` | `/api/v1/webhooks/{uuid}/deliveries` | `insurer.webhooks.view` | Lister les livraisons d'un abonnement. |
+| `POST` | `/api/v1/webhooks/deliveries/{uuid}/retry` | `insurer.webhooks.manage` | Relancer une livraison échouée. |
 
 ### Analytics
 

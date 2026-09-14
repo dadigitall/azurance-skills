@@ -158,9 +158,12 @@ La production utilise `https://provider-api.elenami.com` avec une clé productio
 
 | Méthode | Chemin | Scope | Description |
 | --- | --- | --- | --- |
-| `POST` | `/api/v1/webhook-subscriptions` | `billing.webhooks.manage` | Créer une souscription webhook. |
-| `PATCH` | `/api/v1/webhook-subscriptions/{uuid}` | `billing.webhooks.manage` | Mettre à jour une souscription. |
-| `DELETE` | `/api/v1/webhook-subscriptions/{uuid}` | `billing.webhooks.manage` | Supprimer une souscription. |
+| `GET` | `/api/v1/webhooks` | `provider.webhooks.view` | Lister les souscriptions webhook. |
+| `POST` | `/api/v1/webhooks` | `provider.webhooks.manage` | Créer une souscription webhook. |
+| `PATCH` | `/api/v1/webhooks/{uuid}` | `provider.webhooks.manage` | Mettre à jour une souscription. |
+| `DELETE` | `/api/v1/webhooks/{uuid}` | `provider.webhooks.manage` | Supprimer une souscription. |
+| `GET` | `/api/v1/webhooks/{uuid}/deliveries` | `provider.webhooks.view` | Lister les livraisons d'un abonnement. |
+| `POST` | `/api/v1/webhooks/deliveries/{uuid}/retry` | `provider.webhooks.manage` | Relancer une livraison échouée. |
 
 ### Référentiels
 
@@ -241,6 +244,6 @@ Statuts claim : `SUBMITTED`, `UNDER_REVIEW`, `INFO_NEEDED`, `APPROVED`, `REJECTE
 
 Utiliser `GET /api/v1/billing/sync?updated_after=2026-05-15T00:00:00Z` pour la synchronisation incrémentale. Éviter le polling claim par claim.
 
-Souscrire aux webhooks avec `POST /api/v1/webhook-subscriptions`. Événements disponibles : `payable_invoice.issued`, `payable_invoice.partially_paid`, `payable_invoice.paid`, `payment.created`, `payment.processing`, `payment.succeeded`, `payment.failed`.
+Souscrire aux webhooks avec `POST /api/v1/webhooks`. Événements disponibles : `payable_invoice.issued`, `payable_invoice.partially_paid`, `payable_invoice.paid`, `payment.created`, `payment.processing`, `payment.succeeded`, `payment.failed`, `claim.submitted`, `claim.status_changed`, `claim.info_needed`, `claim.approved`, `claim.rejected`, `claim.paid`, `prior_authorization.requested`, `prior_authorization.decided`.
 
-Vérifier la signature HMAC sur chaque livraison (voir `context.md`).
+Vérifier la signature HMAC sur chaque livraison (voir `context.md`). Dédupliquer via l'en-tête `X-Azurance-Event-Id`.
