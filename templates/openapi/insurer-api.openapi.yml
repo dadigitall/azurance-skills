@@ -510,7 +510,7 @@ components:
           - CLAIM_SUBMISSION
           default: PRECHECK
           description: '`PRECHECK` (par défaut) : résultat mis en cache 5 minutes
-            côté eligibility-service, pour une simulation avant soumission. `CLAIM_SUBMISSION`
+            pour une simulation avant soumission. `CLAIM_SUBMISSION`
             : vérification liée à une soumission réelle de claim, jamais mise en cache.'
     EligibilityBatchCheckRequest:
       type: object

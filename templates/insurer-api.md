@@ -100,7 +100,7 @@ La production utilise `https://insurer-api.elenami.com` avec une clé production
 | `GET` | `/api/v1/claims` | `insurer.claims.view` | Lister les claims. |
 | `GET` | `/api/v1/claims/{claimId}` | `insurer.claims.view` | Détail d'un claim. |
 | `GET` | `/api/v1/claims/{claimId}/clinical-context` | `insurer.claims.view` | Contexte clinique, diagnostics et prescriptions liés au claim. |
-| `PATCH` | `/api/v1/claims/{claimId}/status` | `insurer.claims.manage` | Mettre à jour le statut d'un claim. |
+| `PATCH` | `/api/v1/claims/{claimId}/status` | `insurer.claims.manage` | Mettre à jour le statut d'un claim. Statuts autorisés : `UNDER_REVIEW`, `APPROVED`, `REJECTED`, `INFO_NEEDED`. Le statut `PAID` n'est pas définissable via cet endpoint (rejeté avec `422 PAID_TRANSITION_FORBIDDEN`). |
 | `GET` | `/api/v1/claims/{claimId}/documents` | `insurer.claims.view` | Documents d'un claim. |
 | `GET` | `/api/v1/claims/{claimId}/documents/{mediaUid}/download` | `insurer.claims.view` | Télécharger le binaire d'un document de claim. |
 | `GET` | `/api/v1/claims/{claimId}/clinical-context` | `insurer.claims.view` | Contexte clinique pour la revue d'un claim (encounters, diagnostics, prescriptions). |
@@ -136,16 +136,20 @@ La production utilise `https://insurer-api.elenami.com` avec une clé production
 
 ### Facturation et paiements
 
+Le flux de paiement est obligatoire pour marquer un claim comme payé. Le statut `PAID` n'est pas définissable via `PATCH /claims/{id}/status` — il résulte automatiquement de la confirmation d'un paiement.
+
 | Méthode | Chemin | Scope | Description |
 | --- | --- | --- | --- |
-| `GET` | `/api/v1/billing/payable-invoices` | `insurer.claims.view` | Lister les bordereaux payables. |
-| `GET` | `/api/v1/billing/payable-invoices/{uuid}` | `insurer.claims.view` | Détail d'un bordereau. |
-| `GET` | `/api/v1/billing/payable-invoices/{uuid}/items` | `insurer.claims.view` | Lignes d'un bordereau. |
-| `GET` | `/api/v1/billing/payments` | `insurer.claims.view` | Lister les paiements. |
-| `GET` | `/api/v1/billing/payments/{uuid}` | `insurer.claims.view` | Détail d'un paiement. |
-| `POST` | `/api/v1/billing/payments/{uuid}/confirm` | `insurer.claims.manage` | Confirmer un paiement. |
-| `GET` | `/api/v1/billing/payments/{uuid}/allocations` | `insurer.claims.view` | Allocations d'un paiement. |
-| `GET` | `/api/v1/billing/sync` | `insurer.claims.view` | Flux incrémental des événements billing. |
+| `GET` | `/api/v1/billing/payable-invoices` | `insurer.billing.view` | Lister les bordereaux payables. |
+| `POST` | `/api/v1/billing/payable-invoices` | `insurer.billing.manage` | Créer un bordereau à partir de claims approuvés. |
+| `GET` | `/api/v1/billing/payable-invoices/{uuid}` | `insurer.billing.view` | Détail d'un bordereau. |
+| `GET` | `/api/v1/billing/payable-invoices/{uuid}/items` | `insurer.billing.view` | Lignes d'un bordereau. |
+| `GET` | `/api/v1/billing/payments` | `insurer.billing.view` | Lister les paiements. |
+| `POST` | `/api/v1/billing/payments` | `insurer.billing.manage` | Créer un paiement pour un bordereau. |
+| `GET` | `/api/v1/billing/payments/{uuid}` | `insurer.billing.view` | Détail d'un paiement. |
+| `POST` | `/api/v1/billing/payments/{uuid}/confirm` | `insurer.billing.manage` | Confirmer un paiement (déclenche la transition `PAID` des claims). |
+| `GET` | `/api/v1/billing/payments/{uuid}/allocations` | `insurer.billing.view` | Allocations d'un paiement. |
+| `GET` | `/api/v1/billing/sync` | `insurer.billing.view` | Flux incrémental des événements billing. |
 
 ### Référentiels
 
@@ -305,7 +309,71 @@ Pour les checks en lot, utiliser `POST /api/v1/eligibility/check-batch` avec un 
 }
 ```
 
-Statuts claim : `SUBMITTED`, `UNDER_REVIEW`, `INFO_NEEDED`, `APPROVED`, `REJECTED`, `PAID`. Les décisions doivent rester cohérentes avec les snapshots d'éligibilité et de remboursement calculés à la soumission.
+Statuts claim : `DRAFT`, `SUBMITTED`, `UNDER_REVIEW`, `INFO_NEEDED`, `APPROVED`, `REJECTED`, `PAID`, `PARTIALLY_PAID`, `CANCELLED`. Via `PATCH /claims/{id}/status`, seuls `UNDER_REVIEW`, `APPROVED`, `REJECTED` et `INFO_NEEDED` sont acceptés. Les statuts `PAID` et `PARTIALLY_PAID` résultent automatiquement de la confirmation d'un paiement — toute tentative manuelle retourne `422 PAID_TRANSITION_FORBIDDEN`. Les décisions doivent rester cohérentes avec les snapshots d'éligibilité et de remboursement calculés à la soumission.
+
+## Flux de paiement (billing)
+
+Le statut `PAID` d'un claim ne peut pas être défini manuellement. Il résulte automatiquement de la confirmation d'un paiement.
+
+### 1. Créer un bordereau
+
+`POST /api/v1/billing/payable-invoices`
+
+```json
+{
+  "beneficiary_type": "PROVIDER",
+  "beneficiary_uuid": "prov_sandbox_001",
+  "beneficiary_name": "Clinique Santé Plus",
+  "provider_uuid": "prov_sandbox_001",
+  "provider_name": "Clinique Santé Plus",
+  "currency": "XOF",
+  "claim_uuids": ["claim_sandbox_8dd71"],
+  "claim_references": [
+    {
+      "claim_uuid": "claim_sandbox_8dd71",
+      "provider_invoice_ref": "INV-202609-00018"
+    }
+  ]
+}
+```
+
+Règles : chaque claim doit être `APPROVED` avec `amount_approved > 0`, appartenir au tenant assureur, et ne pas déjà être inclus dans un autre bordereau.
+
+### 2. Créer un paiement
+
+`POST /api/v1/billing/payments`
+
+```json
+{
+  "idempotency_key": "pay-2026-001",
+  "payment_method": "BANK_TRANSFER",
+  "beneficiary_type": "PROVIDER",
+  "beneficiary_uuid": "prov_sandbox_001",
+  "amount": 9600.00,
+  "currency": "XOF",
+  "allocations": [
+    {
+      "payable_invoice_uuid": "inv_sandbox_001",
+      "amount": 9600.00
+    }
+  ]
+}
+```
+
+### 3. Confirmer le paiement
+
+`POST /api/v1/billing/payments/{uuid}/confirm`
+
+```json
+{
+  "external_reference": "TX-789456"
+}
+```
+
+La confirmation déclenche automatiquement :
+- le passage du paiement en `SUCCEEDED`
+- le marquage des lignes du bordereau en `PAID` (ou `PARTIALLY_PAID`)
+- le passage des claims concernés en `PAID` (ou `PARTIALLY_PAID`)
 
 ## Renouvellement
 

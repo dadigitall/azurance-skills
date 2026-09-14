@@ -32,7 +32,9 @@ Use this section when adding, reviewing, or debugging integrations with the publ
 
 Provider scopes include: `covered_persons.resolve`, `consent_requests.create`, `consent_requests.verify`, `eligibility.check`, `providers.network.view`, `providers.network.manage`, `service_executions.create`, `claims.create`, `claims.view`, `claims.documents.attach`, `clinical.encounters.manage`, `clinical.encounters.view`, `clinical.prescriptions.manage`, `clinical.prescriptions.view`, `clinical.records.manage`, `clinical.records.view`, `clinical.documents.attach`, `media.upload`, `billing.payable_invoices.view`, `billing.payments.view`, `billing.sync`, `billing.webhooks.manage`, `prior_authorizations.create`, `prior_authorizations.view`, `prior_authorizations.documents`, `prior_authorizations.cancel`, `reference.medications.view`, `reference.medical_acts.view`, `reference.pathologies.view`.
 
-Insurer scopes include: `insurer.policies.view`, `insurer.policies.manage`, `insurer.members.view`, `insurer.members.manage`, `insurer.claims.view`, `insurer.claims.manage`, `insurer.prior_authorizations.view`, `insurer.prior_authorizations.manage`, `insurer.providers.view`, `insurer.providers.manage`, `eligibility.check`.
+Insurer scopes include: `insurer.policies.view`, `insurer.policies.manage`, `insurer.members.view`, `insurer.members.manage`, `insurer.claims.view`, `insurer.claims.manage`, `insurer.prior_authorizations.view`, `insurer.prior_authorizations.manage`, `insurer.providers.view`, `insurer.providers.manage`, `insurer.billing.view`, `insurer.billing.manage`, `eligibility.check`.
+
+The `insurer.billing.manage` scope is required to create bordereaux (`POST /billing/payable-invoices`), create payments (`POST /billing/payments`), and confirm payments (`POST /billing/payments/{uuid}/confirm`). The `insurer.billing.view` scope covers all read endpoints. Claim status `PAID` and `PARTIALLY_PAID` cannot be set via `PATCH /claims/{id}/status` — they result automatically from a confirmed payment.
 
 ## Webhooks
 
