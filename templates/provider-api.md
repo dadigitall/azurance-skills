@@ -134,7 +134,6 @@ La production utilise `https://provider-api.elenami.com` avec une clé productio
 
 | Méthode | Chemin | Scope | Description |
 | --- | --- | --- | --- |
-| `POST` | `/api/v1/claims` | `claims.create` | Soumettre un claim après vérification finale (`Idempotency-Key`). |
 | `GET` | `/api/v1/claims` | `claims.view` | Lister les claims. |
 | `GET` | `/api/v1/claims/{claimId}` | `claims.view` | Détail d'un claim. |
 | `POST` | `/api/v1/claims/{claimId}/documents` | `claims.documents.attach` | Joindre un document à un claim. |
@@ -186,6 +185,8 @@ La production utilise `https://provider-api.elenami.com` avec une clé productio
 | `GET` | `/api/v1/reference/pathologies/search` | `reference.pathologies.view` | Rechercher une pathologie. |
 | `GET` | `/api/v1/reference/pathologies/export` | `reference.pathologies.view` | Exporter le référentiel pathologies. |
 | `GET` | `/api/v1/reference/pathologies/{identifier}` | `reference.pathologies.view` | Détail d'une pathologie. |
+| `GET` | `/api/v1/reference/coverage-types` | `reference.coverage_types.view` | Référentiel global des codes de garantie (nomenclature des plans). |
+| `GET` | `/api/v1/reference/coverage-types/{code}` | `reference.coverage_types.view` | Détail d'un code de garantie. |
 
 ## Pré-vérification d'éligibilité
 
@@ -237,6 +238,16 @@ Créez d'abord un brouillon avec `POST /api/v1/claims/draft`, puis soumettez-le 
 ```
 
 Si la vérification finale refuse, aucun claim n'est créé et l'API retourne `422`. Si le claim est accepté, Azurance réserve la part assureur sur les plafonds.
+
+### Couverture par ligne de facture
+
+Chaque `items[]` peut porter son propre `coverage_type_code` (voir `GET /api/v1/reference/coverage-types` pour le référentiel). Le code au niveau de la requête sert de défaut pour les lignes sans code — pour une facture multi-couvertures, il peut être omis. Champs utiles par ligne : `coverage_type_code`, `prior_authorization_uid`, `medical_act_code/category/chapter`.
+
+Règles :
+
+- Une ligne non couverte par le plan de l'assuré rejette toute la facture (`422 ITEMS_NOT_ELIGIBLE`, lignes fautives nommées).
+- Avec `service_execution_uid`, chaque ligne facturée doit correspondre à un item de l'exécution (couverture + montant — `422 EXECUTION_MISMATCH`).
+- Une ligne à PA obligatoire sans `prior_authorization_uid` passe `PENDING_AUTHORIZATION` : le claim est créé en `UNDER_REVIEW` et l'approbation assureur est bloquée jusqu'à couverture par une PA approuvée. Le prestataire peut créer la PA après coup via `POST /api/v1/prior-authorizations` avec `claim_item_uids` (les `uid` des lignes en attente).
 
 Statuts claim : `SUBMITTED`, `UNDER_REVIEW`, `INFO_NEEDED`, `APPROVED`, `REJECTED`, `PAID`.
 

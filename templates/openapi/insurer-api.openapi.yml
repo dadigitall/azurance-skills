@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: AZURANCE ERP Insurer API
   version: 0.3.0
-  description: 'API publique pour ERP compagnies d''assurance. Le tenant assurance
+  description: 'API externe sandbox pour ERP compagnies d''assurance. Le tenant assurance
     est toujours dérivé de X-Api-Key; aucun tenant_id, tenant_uid, insurer_uid ou
     insurer_uuid fourni par le client n''est accepté.
 
@@ -510,8 +510,8 @@ components:
           - CLAIM_SUBMISSION
           default: PRECHECK
           description: '`PRECHECK` (par défaut) : résultat mis en cache 5 minutes
-            pour une simulation avant soumission. `CLAIM_SUBMISSION`
-            : vérification liée à une soumission réelle de claim, jamais mise en cache.'
+            pour une simulation avant soumission. `CLAIM_SUBMISSION` : vérification
+            liée à une soumission réelle de claim, jamais mise en cache.'
     EligibilityBatchCheckRequest:
       type: object
       required:
@@ -824,6 +824,110 @@ components:
         updated_at:
           type: string
           format: date-time
+    CreatePayableInvoiceRequest:
+      type: object
+      description: 'Corps de la requête de création d''un bordereau de paiement.
+
+        Tous les claims listés dans `claim_uuids` doivent être en statut
+
+        `APPROVED` avec un `amount_approved > 0` et appartenir au tenant
+
+        assureur. Un claim déjà inclus dans un autre bordereau est rejeté.
+
+        '
+      required:
+      - beneficiary_type
+      - beneficiary_uuid
+      - claim_uuids
+      properties:
+        idempotency_key:
+          type: string
+          maxLength: 120
+          description: Clé d'idempotence (alternative au header `Idempotency-Key`).
+        beneficiary_type:
+          type: string
+          enum:
+          - PROVIDER
+          - INSURED
+          description: 'Type de bénéficiaire du paiement. Si `PROVIDER`, `provider_uuid`
+
+            doit correspondre au prestataire des claims.
+
+            '
+        beneficiary_uuid:
+          type: string
+          maxLength: 100
+          description: Identifiant unique du bénéficiaire.
+        beneficiary_name:
+          type: string
+          maxLength: 200
+          nullable: true
+        provider_uuid:
+          type: string
+          maxLength: 100
+          nullable: true
+          description: Requis si `beneficiary_type` vaut `PROVIDER`.
+        provider_name:
+          type: string
+          maxLength: 200
+          nullable: true
+        period_start:
+          type: string
+          format: date
+          nullable: true
+        period_end:
+          type: string
+          format: date
+          nullable: true
+          description: Doit être postérieur ou égal à `period_start`.
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          nullable: true
+          description: Code ISO 4217. Défaut `XOF`.
+        claim_uuids:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            maxLength: 100
+          description: UUIDs des claims approuvés à inclure dans le bordereau.
+        claim_references:
+          type: array
+          nullable: true
+          description: 'Références externes optionnelles associées à chaque claim
+            (n° facture
+
+            prestataire, ligne de facture, identifiant patient).
+
+            '
+          items:
+            $ref: '#/components/schemas/ClaimReference'
+        metadata:
+          type: object
+          nullable: true
+          description: Métadonnées libres (objet JSON arbitraire).
+    ClaimReference:
+      type: object
+      required:
+      - claim_uuid
+      properties:
+        claim_uuid:
+          type: string
+          maxLength: 100
+        provider_invoice_ref:
+          type: string
+          maxLength: 160
+          nullable: true
+        provider_invoice_line_ref:
+          type: string
+          maxLength: 160
+          nullable: true
+        provider_patient_ref:
+          type: string
+          maxLength: 160
+          nullable: true
     PayableInvoice:
       type: object
       properties:
@@ -1174,8 +1278,6 @@ components:
         uuid:
           type: string
           format: uuid
-        tenant_id:
-          type: string
         name:
           type: string
         target_url:
@@ -1190,6 +1292,58 @@ components:
         metadata:
           type: object
           nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    WebhookDelivery:
+      type: object
+      description: Représente une tentative de livraison d'un événement webhook à
+        une URL d'abonnement. Les livraisons sont créées automatiquement quand un
+        événement est émis et qu'un abonnement actif correspond au type d'événement.
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        event_id:
+          type: string
+          description: Identifiant unique de l'événement. Utiliser cet identifiant
+            pour dédupliquer les livraisons côté intégrateur.
+        event_type:
+          type: string
+        status:
+          type: string
+          enum:
+          - PENDING
+          - DELIVERED
+          - FAILED
+          description: Statut de la livraison. `PENDING` indique une livraison en
+            attente ou programmée pour retry. `DELIVERED` indique une livraison réussie.
+            `FAILED` indique une livraison définitivement échouée.
+        attempts:
+          type: integer
+          description: Nombre de tentatives de livraison effectuées.
+        response_status:
+          type: integer
+          nullable: true
+          description: Code HTTP de la dernière réponse reçue (null si la livraison
+            n'a pas encore été tentée).
+        next_retry_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date de la prochaine tentative programmée (null si la livraison
+            est `DELIVERED` ou `FAILED` définitif).
+        delivered_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+          description: Message d'erreur de la dernière tentative (null si réussie).
         created_at:
           type: string
           format: date-time
@@ -1211,9 +1365,9 @@ components:
           type: string
           format: uri
           maxLength: 1000
-          description: HTTPS obligatoire, port 443 uniquement par défaut, pas d'identifiants
-            dans l'URL, pas d'hôte `localhost`/`.local`/IP privée ou réservée (protection
-            SSRF).
+          description: HTTPS obligatoire en production (HTTP accepté en sandbox),
+            pas d'identifiants dans l'URL, pas d'hôte `localhost`/`.local`/IP privée
+            ou réservée (protection SSRF).
         secret:
           type: string
           minLength: 16
@@ -1801,7 +1955,8 @@ components:
             $ref: '#/components/schemas/ClinicalPrescriptionContext'
         warnings:
           type: array
-          description: Éléments cliniques non récupérés; ces avertissements ne bloquent pas la réponse.
+          description: Éléments cliniques non récupérés; ces avertissements ne bloquent
+            pas la réponse.
           items:
             type: object
             additionalProperties: true
@@ -1892,15 +2047,33 @@ components:
           items:
             type: object
             properties:
-              uid: { type: string, format: uuid }
-              code: { type: string, nullable: true }
-              label: { type: string, nullable: true }
-              dosage: { type: string, nullable: true }
-              frequency: { type: string, nullable: true }
-              duration: { type: string, nullable: true }
-              quantity: { type: number, nullable: true }
-              instructions: { type: string, nullable: true }
-              indication: { type: string, nullable: true }
+              uid:
+                type: string
+                format: uuid
+              code:
+                type: string
+                nullable: true
+              label:
+                type: string
+                nullable: true
+              dosage:
+                type: string
+                nullable: true
+              frequency:
+                type: string
+                nullable: true
+              duration:
+                type: string
+                nullable: true
+              quantity:
+                type: number
+                nullable: true
+              instructions:
+                type: string
+                nullable: true
+              indication:
+                type: string
+                nullable: true
     PriorAuthorization:
       type: object
       description: Demande de prévalidation prestataire à revoir par la compagnie
@@ -1975,8 +2148,16 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: 'Renseigné une fois qu''un claim a consommé cette préautorisation
-            (`status: CONSUMED`).'
+          description: 'Claim lié : consommé par un claim (`status: CONSUMED`) ou
+            claim de rattachement explicite en PA de rattrapage.'
+        claim_item_uids:
+          type: array
+          nullable: true
+          items:
+            type: string
+            format: uuid
+          description: 'Lignes de facture (`claim_items.uid`) explicitement autorisées
+            par cette PA, le cas échéant.'
         validation_request_uid:
           type: string
           format: uuid
@@ -2905,6 +3086,135 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthError'
+    post:
+      operationId: createApiV1Prior-authorizations
+      summary: Émettre une préautorisation
+      description: 'Crée une préautorisation à décider. Deux usages : émettre une
+        PA autonome (avant la facturation), ou répondre à un claim bloqué en
+        `UNDER_REVIEW` en ciblant les lignes de facture en attente via
+        `claim_item_uids` — la PA n''autorise jamais une facture entière, seulement
+        les lignes explicitement citées.'
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - provider_uuid
+              - subscription_uid
+              - covered_person_type
+              - covered_person_uid
+              - coverage_type_code
+              - estimated_amount
+              - consent_ref
+              - items
+              properties:
+                provider_uuid:
+                  type: string
+                  format: uuid
+                claim_item_uids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  description: 'UUIDs des lignes de facture (`claim_items.uid`) que
+                    cette PA autorise — pour le rattrapage d''un claim bloqué. Les
+                    lignes doivent être `PENDING_AUTHORIZATION` sur la même
+                    couverture, et `estimated_amount` doit couvrir leur total.
+                    Omettre pour une PA autonome (flux normal).'
+                subscription_uid:
+                  type: string
+                covered_person_type:
+                  type: string
+                  enum:
+                  - policyholder
+                  - beneficiary
+                covered_person_uid:
+                  type: string
+                coverage_type_code:
+                  type: string
+                service_date_from:
+                  type: string
+                  format: date
+                service_date_to:
+                  type: string
+                  format: date
+                estimated_amount:
+                  type: number
+                  minimum: 0.01
+                currency:
+                  type: string
+                  default: XOF
+                priority:
+                  type: string
+                  enum:
+                  - URGENT
+                  - STANDARD
+                  - DEFERRED
+                reason:
+                  type: string
+                provider_reference:
+                  type: string
+                consent_ref:
+                  type: string
+                  format: uuid
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required:
+                    - description
+                    - quantity
+                    - unit_price
+                    properties:
+                      description:
+                        type: string
+                      quantity:
+                        type: integer
+                        minimum: 1
+                      unit_price:
+                        type: number
+                documents:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      document_type:
+                        type: string
+                        enum:
+                        - PROFORMA
+                        - QUOTE
+                        - INVOICE
+                        - PRESCRIPTION
+                        - MEDICAL_REPORT
+                        - LAB_RESULT
+                        - OTHER
+                      media_uid:
+                        type: string
+                      file_name:
+                        type: string
+      responses:
+        '201':
+          description: Préautorisation créée en `PENDING_REVIEW`
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PriorAuthorization'
+        '401':
+          description: Clé API absente ou invalide
+        '403':
+          description: Scope `insurer.prior_authorizations.manage` manquant
+        '422':
+          description: 'Validation refusée : `CLAIM_ITEM_NOT_FOUND`,
+            `CLAIM_PENDING_PA_MISMATCH` (ligne inexistante/non en attente/mauvaise
+            couverture) ou `CLAIM_PENDING_PA_AMOUNT_TOO_LOW`.'
   /api/v1/prior-authorizations/{uid}:
     get:
       operationId: getPriorAuthorization
@@ -4278,8 +4588,9 @@ paths:
           $ref: '#/components/schemas/ClaimStatus'
       - in: query
         name: provider_uid
-        description: '⚠️ Paramètre actuellement sans effet. Ne pas s''appuyer sur
-          ce filtre pour l''instant.'
+        description: '⚠️ Paramètre actuellement sans effet : le service claims filtre
+          en interne sur `provider_uuid`, mais l''API utilise la clé `provider_uid`,
+          qui n''est jamais lue. Ne pas s''appuyer sur ce filtre pour l''instant.'
         schema:
           type: string
       - in: query
@@ -4380,10 +4691,10 @@ paths:
                     amount: 45000
                     medication_code: MED-PARA500
                 links:
-                  first: https://insurer-api-sandbox.elenami.com/api/v1/claims?page=1
-                  last: https://insurer-api-sandbox.elenami.com/api/v1/claims?page=7
+                  first: http://127.0.0.1:3102/api/v1/claims?page=1
+                  last: http://127.0.0.1:3102/api/v1/claims?page=7
                   prev: null
-                  next: https://insurer-api-sandbox.elenami.com/api/v1/claims?page=2
+                  next: http://127.0.0.1:3102/api/v1/claims?page=2
                 meta:
                   current_page: 1
                   last_page: 7
@@ -4444,10 +4755,11 @@ paths:
     get:
       operationId: getClaimClinicalContext
       summary: Récupérer le contexte clinique d'un claim
-      description: >
-        Retourne les consultations, diagnostics et prescriptions rattachés aux prescriptions
-        référencées par les lignes du claim. Les éléments indisponibles sont signalés dans
-        `warnings` afin de ne pas bloquer la revue du claim.
+      description: 'Retourne les consultations, diagnostics et prescriptions rattachés
+        aux prescriptions référencées par les lignes du claim. Les éléments indisponibles
+        sont signalés dans `warnings` afin de ne pas bloquer la revue du claim.
+
+        '
       parameters:
       - $ref: '#/components/parameters/RequestId'
       - $ref: '#/components/parameters/ClaimId'
@@ -4466,7 +4778,8 @@ paths:
                   encounter_type: consultation
                   encounter_date: '2026-08-15'
                   discharge_date: null
-                  icd10_codes: [J06.9]
+                  icd10_codes:
+                  - J06.9
                   chief_complaint: Fièvre et toux persistante
                   clinical_summary: Infection respiratoire haute sans signe de gravité.
                   department: médecine générale
@@ -4659,76 +4972,6 @@ paths:
                 $ref: '#/components/schemas/AuthError'
         '404':
           description: Aucun claim avec cet UUID pour ce tenant
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /api/v1/claims/{claimId}/documents/{mediaUid}/download:
-    get:
-      operationId: downloadClaimDocument
-      summary: Télécharger le binaire d'un document de claim
-      description: |
-        Télécharge le contenu binaire d'un document attaché à un claim
-        (facture, prescription, rapport médical, résultat de laboratoire).
-        L'assureur ne peut télécharger que les documents des claims qui
-        appartiennent à son tenant (vérification `insurer_tenant_uid`).
-        La réponse est un flux binaire, pas du JSON.
-      parameters:
-      - $ref: '#/components/parameters/RequestId'
-      - $ref: '#/components/parameters/ClaimId'
-      - in: path
-        name: mediaUid
-        required: true
-        description: UID du média tel que retourné par `GET /api/v1/claims/{claimId}/documents`.
-        schema:
-          type: string
-      responses:
-        '200':
-          description: Fichier binaire.
-          headers:
-            Content-Type:
-              description: Type MIME réel du fichier (application/pdf, image/jpeg, image/png...).
-              schema:
-                type: string
-            Content-Length:
-              description: Taille du fichier en octets.
-              schema:
-                type: integer
-            Content-Disposition:
-              description: Nom de fichier suggéré pour le téléchargement.
-              schema:
-                type: string
-          content:
-            application/octet-stream:
-              schema:
-                type: string
-                format: binary
-            application/pdf:
-              schema:
-                type: string
-                format: binary
-            image/jpeg:
-              schema:
-                type: string
-                format: binary
-            image/png:
-              schema:
-                type: string
-                format: binary
-        '401':
-          description: En-tête `X-Api-Key` manquant ou invalide
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthError'
-        '403':
-          description: Scope `insurer.claims.view` manquant
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthError'
-        '404':
-          description: Claim ou document introuvable pour ce tenant
           content:
             application/json:
               schema:
@@ -6043,6 +6286,72 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthError'
+    post:
+      operationId: createPayableInvoice
+      summary: Créer un bordereau de paiement
+      description: "Crée un bordereau de paiement à partir d'un ou plusieurs claims\n\
+        approuvés. Azurance vérifie chaque claim (statut `APPROVED`,\n`amount_approved\
+        \ > 0`, devise) et crée une ligne de bordereau par\nclaim.\n\nRègles :\n-\
+        \ Chaque claim doit être en statut `APPROVED` avec un\n  `amount_approved`\
+        \ strictement positif.\n- Un claim déjà inclus dans un autre bordereau est\
+        \ rejeté.\n- Si `beneficiary_type` vaut `PROVIDER`, le `provider_uuid` doit\n\
+        \  correspondre au prestataire des claims.\n- L'idempotence est assurée par\
+        \ `Idempotency-Key` (header) ou\n  `idempotency_key` (body).\n"
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      - in: header
+        name: Idempotency-Key
+        description: Clé d'idempotence (recommandée). Peut aussi être passée via `idempotency_key`
+          dans le body.
+        required: false
+        schema:
+          type: string
+      responses:
+        '201':
+          description: Bordereau créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayableInvoice'
+        '401':
+          description: Clé API absente ou invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '403':
+          description: Scope `insurer.billing.manage` manquant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '422':
+          description: Validation métier échouée (claim non approuvé, tenant mismatch,
+            claim déjà facturé, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePayableInvoiceRequest'
+            example:
+              beneficiary_type: PROVIDER
+              beneficiary_uuid: a1b2c3d4-sandbox-provider-uuid
+              beneficiary_name: Clinique Sandbox
+              provider_uuid: a1b2c3d4-sandbox-provider-uuid
+              provider_name: Clinique Sandbox
+              currency: XOF
+              claim_uuids:
+              - ce1d98a3-sandbox-claim-uuid-001
+              claim_references:
+              - claim_uuid: ce1d98a3-sandbox-claim-uuid-001
+                provider_invoice_ref: INV-202609-00018
+              metadata:
+                source: manual
   /api/v1/billing/payable-invoices/{uuid}:
     get:
       operationId: getPayableInvoice
@@ -6088,10 +6397,11 @@ paths:
     get:
       operationId: listPayableInvoiceItems
       summary: Lister les lignes d'une facture payable
-      description: Pagination par curseur, comme la liste des factures (`limit` par
-        défaut 100).
+      description: Pagination par curseur identique à la liste des factures — repasser
+        `meta.next_cursor` dans `cursor` (`limit` par défaut 100, max 100).
       parameters:
       - $ref: '#/components/parameters/RequestId'
+      - $ref: '#/components/parameters/Cursor'
       - in: path
         name: uuid
         required: true
@@ -6103,10 +6413,11 @@ paths:
         schema:
           type: integer
           minimum: 1
+          maximum: 100
       responses:
         '200':
-          description: Lignes de la facture (curseur — pas de `meta.next_cursor` ici,
-            pagination Laravel `cursorPaginate` native)
+          description: Lignes de la facture (curseur, `meta.next_cursor` comme la
+            liste)
           content:
             application/json:
               schema:
@@ -6116,6 +6427,12 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/PayableInvoiceItem'
+                  meta:
+                    type: object
+                    properties:
+                      next_cursor:
+                        type: integer
+                        nullable: true
         '401':
           description: En-tête `X-Api-Key` manquant ou invalide
           content:
@@ -6404,10 +6721,11 @@ paths:
     get:
       operationId: listPaymentAllocations
       summary: Lister les allocations d'un paiement
-      description: Pagination par curseur (`limit`, pas de `cursor` explicite en réponse
-        dans ce cas — `Link`/pagination native Laravel `cursorPaginate`).
+      description: Pagination par curseur identique aux factures — repasser `meta.next_cursor`
+        dans `cursor` (`limit` par défaut 100, max 100).
       parameters:
       - $ref: '#/components/parameters/RequestId'
+      - $ref: '#/components/parameters/Cursor'
       - in: path
         name: uuid
         required: true
@@ -6419,6 +6737,7 @@ paths:
         schema:
           type: integer
           minimum: 1
+          maximum: 100
       responses:
         '200':
           description: Allocations du paiement
@@ -6431,6 +6750,12 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/PaymentAllocation'
+                  meta:
+                    type: object
+                    properties:
+                      next_cursor:
+                        type: integer
+                        nullable: true
         '401':
           description: En-tête `X-Api-Key` manquant ou invalide
           content:
@@ -7318,12 +7643,113 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v1/webhooks/{uuid}/deliveries:
+    get:
+      operationId: listWebhookDeliveries
+      summary: Lister les livraisons d'un abonnement webhook
+      description: Retourne l'historique paginé des tentatives de livraison des événements
+        webhook pour l'abonnement spécifié. Les livraisons sont triées par date de
+        création décroissante.
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      - in: path
+        name: uuid
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID de l'abonnement webhook
+      - in: query
+        name: per_page
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+        description: Nombre de livraisons par page
+      responses:
+        '200':
+          description: Liste paginée des livraisons
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WebhookDelivery'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          description: En-tête `X-Api-Key` manquant ou invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '403':
+          description: Scope `insurer.webhooks.view` manquant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '404':
+          description: Aucun abonnement avec cet UUID pour ce tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/webhooks/deliveries/{uuid}/retry:
+    post:
+      operationId: retryWebhookDelivery
+      summary: Relancer manuellement une livraison webhook échouée
+      description: Reprogramme la livraison d'un événement webhook précédemment marqué
+        comme échoué (statut `FAILED`). La livraison conserve le même identifiant
+        d'événement — l'intégrateur doit toujours dédupliquer via l'en-tête `X-Azurance-Event-Id`.
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      - in: path
+        name: uuid
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID de la livraison webhook à relancer
+      responses:
+        '200':
+          description: Livraison relancée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/WebhookDelivery'
+        '401':
+          description: En-tête `X-Api-Key` manquant ou invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '403':
+          description: Scope `insurer.webhooks.manage` manquant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '404':
+          description: Aucune livraison avec cet UUID pour ce tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/analytics/portfolio-summary:
     get:
       operationId: getPortfolioSummary
       summary: Synthèse du portefeuille (souscriptions, primes, assurés)
-      description: Agrégats calculés à la volée (pas de cache). `date_from`/`date_to`
-        sont acceptés mais ignorés par cet agrégat précis — présents surtout pour
+      description: Agrégats calculés à la volée par requêtes SQL directes (pas de
+        cache). `date_from`/ `date_to` sont acceptés mais ignorés par cet agrégat
+        précis (aucun filtre par date appliqué côté requête) — présents surtout pour
         homogénéité avec les autres endpoints analytics.
       parameters:
       - $ref: '#/components/parameters/RequestId'
@@ -8044,3 +8470,236 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+  /api/v1/claims/{claimId}/documents/{mediaUid}/download:
+    get:
+      operationId: downloadClaimDocument
+      summary: Télécharger le binaire d'un document de claim
+      description: 'Télécharge le contenu binaire d''un document attaché à un claim.
+
+        L''assureur ne peut télécharger que les documents des claims qui
+
+        appartiennent à son tenant (vérification `insurer_tenant_uid`).
+
+        La réponse est un flux binaire, pas du JSON.
+
+        '
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      - in: path
+        name: claimId
+        required: true
+        description: UUID du claim.
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: mediaUid
+        required: true
+        description: UID du média tel que retourné par `GET /api/v1/claims/{claimId}/documents`.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Fichier binaire.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+              examples:
+                pdf:
+                  summary: Facture PDF
+                  value: "(flux binaire — Content-Type: application/pdf,\n Content-Disposition:\
+                    \ attachment; filename=\"facture.pdf\")\n"
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Clé API absente ou invalide
+        '403':
+          description: Scope `insurer.claims.view` manquant
+        '404':
+          description: Claim ou document introuvable pour ce tenant.
+  /api/v1/affiliation-requests:
+    get:
+      operationId: listApiV1Affiliation-requests
+      summary: Lister affiliation-requests
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Succès
+        '401':
+          description: Clé API absente ou invalide
+    post:
+      operationId: createApiV1Affiliation-requests
+      summary: Créer affiliation-requests
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Succès
+        '401':
+          description: Clé API absente ou invalide
+  /api/v1/affiliation-requests/{uuid}:
+    get:
+      operationId: getApiV1Affiliation-requests
+      summary: Consulter affiliation-requests
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      - in: path
+        name: uuid
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Succès
+        '401':
+          description: Clé API absente ou invalide
+  /api/v1/affiliation-requests/{uuid}/approve:
+    post:
+      operationId: createApiV1Affiliation-requestsApprove
+      summary: Créer approve
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      - in: path
+        name: uuid
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Succès
+        '401':
+          description: Clé API absente ou invalide
+  /api/v1/affiliation-requests/{uuid}/reject:
+    post:
+      operationId: createApiV1Affiliation-requestsReject
+      summary: Créer reject
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      - in: path
+        name: uuid
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Succès
+        '401':
+          description: Clé API absente ou invalide
+  /api/v1/enterprises:
+    get:
+      operationId: listApiV1Enterprises
+      summary: Lister enterprises
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Succès
+        '401':
+          description: Clé API absente ou invalide
+    post:
+      operationId: createApiV1Enterprises
+      summary: Créer enterprises
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Succès
+        '401':
+          description: Clé API absente ou invalide
+  /api/v1/enterprises/{uid}/invitations:
+    post:
+      operationId: createApiV1EnterprisesInvitations
+      summary: Créer invitations
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      - in: path
+        name: uid
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Succès
+        '401':
+          description: Clé API absente ou invalide
+  /api/v1/group-contracts:
+    get:
+      operationId: listApiV1Group-contracts
+      summary: Lister group-contracts
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Succès
+        '401':
+          description: Clé API absente ou invalide
+    post:
+      operationId: createApiV1Group-contracts
+      summary: Créer group-contracts
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Succès
+        '401':
+          description: Clé API absente ou invalide
+  /api/v1/group-contracts/{uuid}:
+    get:
+      operationId: getApiV1Group-contracts
+      summary: Consulter group-contracts
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      - in: path
+        name: uuid
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Succès
+        '401':
+          description: Clé API absente ou invalide
+    patch:
+      operationId: updateApiV1Group-contracts
+      summary: Mettre à jour group-contracts
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      - in: path
+        name: uuid
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Succès
+        '401':
+          description: Clé API absente ou invalide
+  /api/v1/group-contracts/{uuid}/status:
+    patch:
+      operationId: updateApiV1Group-contractsStatus
+      summary: Mettre à jour status
+      parameters:
+      - $ref: '#/components/parameters/RequestId'
+      - in: path
+        name: uuid
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Succès
+        '401':
+          description: Clé API absente ou invalide

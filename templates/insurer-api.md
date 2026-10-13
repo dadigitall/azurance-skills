@@ -100,7 +100,7 @@ La production utilise `https://insurer-api.elenami.com` avec une clé production
 | `GET` | `/api/v1/claims` | `insurer.claims.view` | Lister les claims. |
 | `GET` | `/api/v1/claims/{claimId}` | `insurer.claims.view` | Détail d'un claim. |
 | `GET` | `/api/v1/claims/{claimId}/clinical-context` | `insurer.claims.view` | Contexte clinique, diagnostics et prescriptions liés au claim. |
-| `PATCH` | `/api/v1/claims/{claimId}/status` | `insurer.claims.manage` | Mettre à jour le statut d'un claim. Statuts autorisés : `UNDER_REVIEW`, `APPROVED`, `REJECTED`, `INFO_NEEDED`. Le statut `PAID` n'est pas définissable via cet endpoint (rejeté avec `422 PAID_TRANSITION_FORBIDDEN`). |
+| `PATCH` | `/api/v1/claims/{claimId}/status` | `insurer.claims.manage` | Mettre à jour le statut d'un claim. Statuts autorisés : `UNDER_REVIEW`, `APPROVED`, `REJECTED`, `INFO_NEEDED`. Le statut `PAID` n'est pas définissable via cet endpoint (rejeté avec `422 PAID_TRANSITION_FORBIDDEN`). L'approbation est aussi bloquée (`422 CLAIM_PENDING_PRIOR_AUTHORIZATIONS`) tant qu'une ligne de facture est `PENDING_AUTHORIZATION` — émettre une PA sur les lignes via `POST /prior-authorizations` avec `claim_item_uids`. |
 | `GET` | `/api/v1/claims/{claimId}/documents` | `insurer.claims.view` | Documents d'un claim. |
 | `GET` | `/api/v1/claims/{claimId}/documents/{mediaUid}/download` | `insurer.claims.view` | Télécharger le binaire d'un document de claim. |
 | `GET` | `/api/v1/claims/{claimId}/clinical-context` | `insurer.claims.view` | Contexte clinique pour la revue d'un claim (encounters, diagnostics, prescriptions). |
@@ -117,9 +117,30 @@ La production utilise `https://insurer-api.elenami.com` avec une clé production
 
 | Méthode | Chemin | Scope | Description |
 | --- | --- | --- | --- |
-| `GET` | `/api/v1/prior-authorizations` | `insurer.claims.view` | Lister les autorisations préalables. |
-| `GET` | `/api/v1/prior-authorizations/{uid}` | `insurer.claims.view` | Détail d'une autorisation. |
+| `POST` | `/api/v1/prior-authorizations` | `insurer.prior_authorizations.manage` | Émettre une PA — autonome, ou de rattrapage d'un claim bloqué en ciblant ses lignes en attente via `claim_item_uids` (la PA autorise uniquement les lignes citées). |
+| `GET` | `/api/v1/prior-authorizations` | `insurer.prior_authorizations.view` | Lister les autorisations préalables. |
+| `GET` | `/api/v1/prior-authorizations/{uid}` | `insurer.prior_authorizations.view` | Détail d'une autorisation. |
 | `POST` | `/api/v1/prior-authorizations/{uid}/decision` | `insurer.prior_authorizations.manage` | Décision sur une autorisation préalable. |
+
+### Entreprises, contrats groupe et affiliations
+
+La relation assureur ↔ employeur : créer l'organisation entreprise, la lier par un contrat groupe, puis traiter les demandes d'affiliation de ses salariés.
+
+| Méthode | Chemin | Scope | Description |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/enterprises` | `insurer.enterprises.view` | Lister les organisations employeur. |
+| `POST` | `/api/v1/enterprises` | `insurer.enterprises.manage` | Créer une organisation employeur. |
+| `POST` | `/api/v1/enterprises/{uid}/invitations` | `insurer.enterprises.manage` | Inviter un administrateur entreprise. |
+| `GET` | `/api/v1/group-contracts` | `insurer.group_contracts.view` | Lister les contrats groupe. |
+| `POST` | `/api/v1/group-contracts` | `insurer.group_contracts.manage` | Créer un contrat groupe. |
+| `GET` | `/api/v1/group-contracts/{uuid}` | `insurer.group_contracts.view` | Détail d'un contrat groupe. |
+| `PATCH` | `/api/v1/group-contracts/{uuid}` | `insurer.group_contracts.manage` | Modifier un contrat groupe. |
+| `PATCH` | `/api/v1/group-contracts/{uuid}/status` | `insurer.group_contracts.manage` | Activer ou suspendre un contrat groupe. |
+| `GET` | `/api/v1/affiliation-requests` | `insurer.affiliations.view` | Lister les demandes d'affiliation de bénéficiaires. |
+| `POST` | `/api/v1/affiliation-requests` | `insurer.affiliations.manage` | Créer une demande d'affiliation. |
+| `GET` | `/api/v1/affiliation-requests/{uuid}` | `insurer.affiliations.view` | Détail d'une demande. |
+| `POST` | `/api/v1/affiliation-requests/{uuid}/approve` | `insurer.affiliations.manage` | Approuver une affiliation — crée la souscription du bénéficiaire. |
+| `POST` | `/api/v1/affiliation-requests/{uuid}/reject` | `insurer.affiliations.manage` | Rejeter une affiliation. |
 
 ### Réseau prestataires
 
@@ -373,6 +394,7 @@ Règles : chaque claim doit être `APPROVED` avec `amount_approved > 0`, apparte
 ```
 
 La confirmation déclenche automatiquement :
+
 - le passage du paiement en `SUCCEEDED`
 - le marquage des lignes du bordereau en `PAID` (ou `PARTIALLY_PAID`)
 - le passage des claims concernés en `PAID` (ou `PARTIALLY_PAID`)

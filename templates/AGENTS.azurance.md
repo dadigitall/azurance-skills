@@ -8,7 +8,7 @@ Use this section when adding, reviewing, or debugging integrations with the publ
 - Use `.azurance/llm/provider-api.md` for ERP provider workflows and endpoint list.
 - Use `.azurance/llm/insurer-api.md` for ERP insurer workflows and endpoint list.
 - Use `.azurance/llm/openapi/provider-api.openapi.yml` and `.azurance/llm/openapi/insurer-api.openapi.yml` for exact paths, methods, schemas, parameters, and examples.
-- The full interactive documentation is at https://dadigitall.mintlify.site.
+- The full interactive documentation is at <https://dadigitall.mintlify.site>.
 
 ## Non-negotiable rules
 
@@ -30,9 +30,9 @@ Use this section when adding, reviewing, or debugging integrations with the publ
 
 ## Scopes
 
-Provider scopes include: `covered_persons.resolve`, `consent_requests.create`, `consent_requests.verify`, `eligibility.check`, `providers.network.view`, `providers.network.manage`, `service_executions.create`, `claims.create`, `claims.view`, `claims.documents.attach`, `clinical.encounters.manage`, `clinical.encounters.view`, `clinical.prescriptions.manage`, `clinical.prescriptions.view`, `clinical.records.manage`, `clinical.records.view`, `clinical.documents.attach`, `media.upload`, `billing.payable_invoices.view`, `billing.payments.view`, `billing.sync`, `provider.webhooks.view`, `provider.webhooks.manage`, `prior_authorizations.create`, `prior_authorizations.view`, `prior_authorizations.documents`, `prior_authorizations.cancel`, `reference.medications.view`, `reference.medical_acts.view`, `reference.pathologies.view`.
+Provider scopes include: `covered_persons.resolve`, `consent_requests.create`, `consent_requests.verify`, `eligibility.check`, `providers.network.view`, `providers.network.manage`, `service_executions.create`, `claims.create`, `claims.view`, `claims.documents.attach`, `clinical.encounters.manage`, `clinical.encounters.view`, `clinical.prescriptions.manage`, `clinical.prescriptions.view`, `clinical.records.manage`, `clinical.records.view`, `clinical.documents.attach`, `media.upload`, `billing.payable_invoices.view`, `billing.payments.view`, `billing.sync`, `provider.webhooks.view`, `provider.webhooks.manage`, `prior_authorizations.create`, `prior_authorizations.view`, `prior_authorizations.documents`, `prior_authorizations.cancel`, `reference.medications.view`, `reference.medical_acts.view`, `reference.pathologies.view`, `reference.coverage_types.view`.
 
-Insurer scopes include: `insurer.policies.view`, `insurer.policies.manage`, `insurer.members.view`, `insurer.members.manage`, `insurer.claims.view`, `insurer.claims.manage`, `insurer.prior_authorizations.view`, `insurer.prior_authorizations.manage`, `insurer.providers.view`, `insurer.providers.manage`, `insurer.billing.view`, `insurer.billing.manage`, `eligibility.check`.
+Insurer scopes include: `insurer.policies.view`, `insurer.policies.manage`, `insurer.members.view`, `insurer.members.manage`, `insurer.claims.view`, `insurer.claims.manage`, `insurer.prior_authorizations.view`, `insurer.prior_authorizations.manage`, `insurer.providers.view`, `insurer.providers.manage`, `insurer.billing.view`, `insurer.billing.manage`, `insurer.enterprises.view`, `insurer.enterprises.manage`, `insurer.group_contracts.view`, `insurer.group_contracts.manage`, `insurer.affiliations.view`, `insurer.affiliations.manage`, `eligibility.check`.
 
 The `insurer.billing.manage` scope is required to create bordereaux (`POST /billing/payable-invoices`), create payments (`POST /billing/payments`), and confirm payments (`POST /billing/payments/{uuid}/confirm`). The `insurer.billing.view` scope covers all read endpoints. Claim status `PAID` and `PARTIALLY_PAID` cannot be set via `PATCH /claims/{id}/status` — they result automatically from a confirmed payment.
 
