@@ -209,7 +209,7 @@ Créez d'abord un brouillon avec `POST /api/v1/claims/draft`, puis soumettez-le 
 
 ```json
 {
-  "subscription_id": "11000000-0000-4000-8000-000000000001",
+  "contract_uid": "11000000-0000-4000-8000-000000000001",
   "policyholder_id": "21000000-0000-4000-8000-000000000001",
   "service_execution_uid": "svc-exec-sandbox-001",
   "covered_person_type": "beneficiary",
@@ -217,15 +217,20 @@ Créez d'abord un brouillon avec `POST /api/v1/claims/draft`, puis soumettez-le 
   "consent_ref": "40000000-0000-4000-8000-000000000001",
   "coverage_type_code": "PHARMACY_DRUG",
   "service_date": "2026-05-26",
-  "amount_claimed": 3500,
+  "amount_claimed": 29200,
   "currency": "XOF",
   "provider_reference": "ERP-CLAIM-2026-0001",
   "precheck_eligibility_uuid": "01HY6Q5V9QZ4J7B0J6C2P8T9RK",
   "items": [
     {
-      "description": "Dispensation Amoxicilline 500mg",
-      "quantity": 1,
-      "unit_price": 3500
+      "description": "Dispensation Amoxicilline 500mg x10",
+      "quantity": 10,
+      "unit_price": 2920,
+      "prescription_uid": "50000000-0000-4000-8000-000000000001",
+      "prescription_line_uid": "50000000-0000-4000-8000-000000000002",
+      "medication_product_uid": "60000000-0000-4000-8000-000000000001",
+      "prescribed_quantity": 12,
+      "dispensed_quantity": 10
     }
   ],
   "documents": [
@@ -239,9 +244,13 @@ Créez d'abord un brouillon avec `POST /api/v1/claims/draft`, puis soumettez-le 
 
 Si la vérification finale refuse, aucun claim n'est créé et l'API retourne `422`. Si le claim est accepté, Azurance réserve la part assureur sur les plafonds.
 
+### Identifiants référentiels (`reference_status`)
+
+Chaque ligne est contrôlée contre les référentiels cliniques : les uid inexistants (`medical_act_uid`, `medication_product_uid`, `prescription_line_uid`) rejettent le brouillon en `422`, tandis que les codes inconnus (`medical_act_code`, `medication_code`…) produisent des `warnings` `UNKNOWN_REFERENCE_CODE` — non bloquants, sauf pour les actes sous un plan à règles par acte (rejet, revérifié à la soumission). Chaque ligne expose `item_type` (dérivé de la prescription) et `reference_status` (`VERIFIED`/`UNKNOWN`/`NONE`).
+
 ### Couverture par ligne de facture
 
-Chaque `items[]` peut porter son propre `coverage_type_code` (voir `GET /api/v1/reference/coverage-types` pour le référentiel). Le code au niveau de la requête sert de défaut pour les lignes sans code — pour une facture multi-couvertures, il peut être omis. Champs utiles par ligne : `coverage_type_code`, `prior_authorization_uid`, `medical_act_code/category/chapter`.
+Chaque `items[]` peut porter son propre `coverage_type_code` (voir `GET /api/v1/reference/coverage-types` pour le référentiel). Le code au niveau de la requête sert de défaut pour les lignes sans code — pour une facture multi-couvertures, il peut être omis. Champs utiles par ligne : `coverage_type_code`, `prior_authorization_uid`, `prescription_uid` + `prescription_line_uid`, `medical_act_uid`/`medical_act_code`/`category`/`chapter`, `medication_product_uid`, `medication_code`, `presentation_uid`, `prescribed_quantity`/`dispensed_quantity`, `substitution_reason`, `batch_number`.
 
 Règles :
 
