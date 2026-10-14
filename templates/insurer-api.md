@@ -98,7 +98,7 @@ La production utilise `https://insurer-api.elenami.com` avec une clé production
 | --- | --- | --- | --- |
 | `GET` | `/api/v1/claims/stats` | `insurer.claims.view` | Statistiques claims. |
 | `GET` | `/api/v1/claims` | `insurer.claims.view` | Lister les claims. |
-| `GET` | `/api/v1/claims/{claimId}` | `insurer.claims.view` | Détail d'un claim. |
+| `GET` | `/api/v1/claims/{claimId}` | `insurer.claims.view` | Détail d'un claim. Chaque ligne `items[]` expose `uid`, `item_type` (nature dérivée de la prescription) et `reference_status` (`VERIFIED`/`UNKNOWN`/`NONE` — contrôle des identifiants cliniques contre les référentiels). |
 | `GET` | `/api/v1/claims/{claimId}/clinical-context` | `insurer.claims.view` | Contexte clinique, diagnostics et prescriptions liés au claim. |
 | `PATCH` | `/api/v1/claims/{claimId}/status` | `insurer.claims.manage` | Mettre à jour le statut d'un claim. Statuts autorisés : `UNDER_REVIEW`, `APPROVED`, `REJECTED`, `INFO_NEEDED`. Le statut `PAID` n'est pas définissable via cet endpoint (rejeté avec `422 PAID_TRANSITION_FORBIDDEN`). L'approbation est aussi bloquée (`422 CLAIM_PENDING_PRIOR_AUTHORIZATIONS`) tant qu'une ligne de facture est `PENDING_AUTHORIZATION` — émettre une PA sur les lignes via `POST /prior-authorizations` avec `claim_item_uids`. |
 | `GET` | `/api/v1/claims/{claimId}/documents` | `insurer.claims.view` | Documents d'un claim. |
