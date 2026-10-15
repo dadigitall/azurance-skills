@@ -250,11 +250,24 @@ Chaque ligne est contrôlée contre les référentiels cliniques : les uid inexi
 
 ### Couverture par ligne de facture
 
-Chaque `items[]` peut porter son propre `coverage_type_code` (voir `GET /api/v1/reference/coverage-types` pour le référentiel). Le code au niveau de la requête sert de défaut pour les lignes sans code — pour une facture multi-couvertures, il peut être omis. Champs utiles par ligne : `coverage_type_code`, `prior_authorization_uid`, `prescription_uid` + `prescription_line_uid`, `medical_act_uid`/`medical_act_code`/`category`/`chapter`, `medication_product_uid`, `medication_code`, `presentation_uid`, `prescribed_quantity`/`dispensed_quantity`, `substitution_reason`, `batch_number`.
+Chaque `items[]` peut porter son propre `coverage_type_code` (voir `GET /api/v1/reference/coverage-types` pour le référentiel). Le code au niveau de la requête sert de défaut pour les lignes sans code — pour une facture multi-couvertures, il peut être omis. Champs utiles par ligne : `coverage_type_code`, `prior_authorization_uid`, `prescription_uid` + `prescription_line_uid`, `internal_order`, `medical_act_uid`/`medical_act_code`/`category`/`chapter`, `medication_product_uid`, `medication_code`, `presentation_uid`, `prescribed_quantity`/`dispensed_quantity`, `sessions_performed`, `substitution_reason`, `batch_number`.
 
 Règles :
 
 - Une ligne non couverte par le plan de l'assuré rejette toute la facture (`422 ITEMS_NOT_ELIGIBLE`, lignes fautives nommées).
+
+### Ordres internes (`internal_order`) — prestations effectuées
+
+Les couvertures à ledger (`PHARMACY_DRUG`, `LAB_ANALYSIS`, `KINE_SESSION`, `OPTICS_GLASSES`, `DENTAL_BASIC`) exigent une ligne d'ordonnance par item : externe via `prescription_uid` + `prescription_line_uid`, ou **interne** via `internal_order` quand le prestataire se prescrit à lui-même (hôpital/clinique avec labo ou pharmacie intégré). La plateforme matérialise une vraie ordonnance (encounter + ordonnance + lignes, atomique et idempotente par référence externe) puis poursuit le flux normal.
+
+```json
+{ "coverage_type_code": "LAB_ANALYSIS", "description": "NFS", "quantity": 1, "unit_price": 8500,
+  "internal_order": { "code": "NABM-1010", "prescriber_name": "Dr A. Sall",
+    "prescriber_registration_number": "ORD-1234", "encounter_uid": "optionnel — séjour existant" } }
+```
+
+Règles : `code` + `prescriber_name` obligatoires ; `line_type`/`quantity` dérivés de la couverture ; items groupés par prescripteur dans une même ordonnance ; `encounter_uid` optionnel (sinon encounter créé) ; mutuellement exclusif avec les refs prescription ; **réservé aux types prescripteurs** `HOSPITAL`/`CLINIC`/`SPECIALIST` — `PHARMACY`/`LABORATORY` rejetés `403 INTERNAL_ORDER_NOT_ALLOWED` (le contrôle couvre aussi toute auto-prescription détectée, quel que soit le chemin de création). La ligne est flaguée `metadata.internal_order: true` (dérivé, visible par l'assureur).
+
 - Avec `service_execution_uid`, chaque ligne facturée doit correspondre à un item de l'exécution (couverture + montant — `422 EXECUTION_MISMATCH`).
 - Une ligne à PA obligatoire sans `prior_authorization_uid` passe `PENDING_AUTHORIZATION` : le claim est créé en `UNDER_REVIEW` et l'approbation assureur est bloquée jusqu'à couverture par une PA approuvée. Le prestataire peut créer la PA après coup via `POST /api/v1/prior-authorizations` avec `claim_item_uids` (les `uid` des lignes en attente).
 
