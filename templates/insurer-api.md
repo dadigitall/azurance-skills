@@ -193,6 +193,14 @@ Le flux de paiement est obligatoire pour marquer un claim comme payé. Le statut
 | `GET` | `/api/v1/reference/pathologies/export` | — | Exporter les pathologies. |
 | `GET` | `/api/v1/reference/pathologies/{identifier}` | — | Détail d'une pathologie. |
 
+### Litiges
+
+| Méthode | Chemin | Scope | Description |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/disputes` | `insurer.disputes.view` | Lister les litiges du tenant assureur. |
+| `GET` | `/api/v1/disputes/{uid}` | `insurer.disputes.view` | Détail d'un litige (+ décisions d'arbitrage). |
+| `POST` | `/api/v1/disputes` | `insurer.disputes.manage` | Déclarer un litige (tenant dérivé de la clé). |
+
 ### Webhooks
 
 | Méthode | Chemin | Scope | Description |

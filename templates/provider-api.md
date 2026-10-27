@@ -142,6 +142,14 @@ La production utilise `https://provider-api.elenami.com` avec une clé productio
 | `POST` | `/api/v1/claims/{claimId}/submit` | `claims.create` | Soumettre un brouillon. |
 | `POST` | `/api/v1/claims/{claimId}/draft/cancel` | `claims.create` | Annuler un brouillon. |
 
+### Litiges
+
+| Méthode | Chemin | Scope | Description |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/disputes` | `disputes.view` | Lister les litiges du prestataire. |
+| `GET` | `/api/v1/disputes/{uid}` | `disputes.view` | Détail d'un litige (+ décisions d'arbitrage). |
+| `POST` | `/api/v1/disputes` | `disputes.create` | Déclarer un litige (identité dérivée de la clé). |
+
 ### Facturation et paiements
 
 | Méthode | Chemin | Scope | Description |
