@@ -137,10 +137,10 @@ La production utilise `https://provider-api.elenami.com` avec une clé productio
 | `GET` | `/api/v1/claims` | `claims.view` | Lister les claims. |
 | `GET` | `/api/v1/claims/{claimId}` | `claims.view` | Détail d'un claim. |
 | `POST` | `/api/v1/claims/{claimId}/documents` | `claims.documents.attach` | Joindre un document à un claim. |
-| `POST` | `/api/v1/claims/draft` | `claims.create` | Créer un brouillon de claim. |
+| `POST` | `/api/v1/claims/draft` | `claims.create` | Créer un brouillon de claim (par référence aux service executions). |
 | `GET` | `/api/v1/claims/{claimId}/draft` | `claims.view` | Consulter un brouillon. |
 | `POST` | `/api/v1/claims/{claimId}/submit` | `claims.create` | Soumettre un brouillon. |
-| `POST` | `/api/v1/claims/{claimId}/draft/cancel` | `claims.create` | Annuler un brouillon. |
+| `DELETE` | `/api/v1/claims/{claimId}/draft` | `claims.create` | Annuler un brouillon (libère les exécutions). |
 
 ### Litiges
 
@@ -213,34 +213,13 @@ La pré-vérification est informative, `read_only=true`, ne réserve aucun plafo
 
 ## Soumission de claim
 
-Créez d'abord un brouillon avec `POST /api/v1/claims/draft`, puis soumettez-le avec `POST /api/v1/claims/{claimId}/submit` après les contrôles finaux.
+Le claim facture **par référence** : déclarez chaque prestation avec `POST /api/v1/service-executions`, créez le brouillon avec `POST /api/v1/claims/draft` en ne passant que leurs `uuid`, puis soumettez avec `POST /api/v1/claims/{claimId}/submit` après les contrôles finaux. Le body du brouillon ne contient **aucun champ métier** — contrat, personne couverte, lignes et montant sont sourcés depuis les exécutions.
 
 ```json
 {
-  "contract_uid": "11000000-0000-4000-8000-000000000001",
-  "policyholder_id": "21000000-0000-4000-8000-000000000001",
-  "service_execution_uid": "svc-exec-sandbox-001",
-  "covered_person_type": "beneficiary",
-  "covered_person_uid": "12000000-0000-4000-8000-000000000001",
-  "consent_ref": "40000000-0000-4000-8000-000000000001",
-  "coverage_type_code": "PHARMACY_DRUG",
-  "service_date": "2026-05-26",
-  "amount_claimed": 29200,
-  "currency": "XOF",
+  "service_execution_uids": ["50000000-0000-4000-8000-000000000001"],
   "provider_reference": "ERP-CLAIM-2026-0001",
   "precheck_eligibility_uuid": "01HY6Q5V9QZ4J7B0J6C2P8T9RK",
-  "items": [
-    {
-      "description": "Dispensation Amoxicilline 500mg x10",
-      "quantity": 10,
-      "unit_price": 2920,
-      "prescription_uid": "50000000-0000-4000-8000-000000000001",
-      "prescription_line_uid": "50000000-0000-4000-8000-000000000002",
-      "medication_product_uid": "60000000-0000-4000-8000-000000000001",
-      "prescribed_quantity": 12,
-      "dispensed_quantity": 10
-    }
-  ],
   "documents": [
     {
       "document_type": "PRESCRIPTION",
@@ -250,15 +229,31 @@ Créez d'abord un brouillon avec `POST /api/v1/claims/draft`, puis soumettez-le 
 }
 ```
 
+Champs du brouillon :
+
+| Champ | Requis | Description |
+| --- | --- | --- |
+| `service_execution_uids` | oui | Prestations à facturer (1–50 uuid) — `recorded`, même prestataire, contrat, personne couverte et assureur. |
+| `prior_authorization_uid` | non | PA couvrant l'ensemble du claim — claims mixtes PA/sans PA non supportés, regrouper les actes sous PA dans un claim dédié. |
+| `policyholder_id` | conditionnel | **Requis si la personne couverte est un `beneficiary`** (`422 POLICYHOLDER_REQUIRED`) ; dérivé pour un claim `policyholder`. |
+| `provider_reference` | recommandé | Référence facture, unique par prestataire — `409 PROVIDER_REFERENCE_CONFLICT` si rejouée. Défaut : celle de l'exécution. |
+| `precheck_eligibility_uuid` | non | UUID d'un précheck réutilisé. |
+| `currency` | non | `XOF` par défaut. |
+| `documents`, `notes` | non | Justificatifs (`document_type`: `INVOICE`/`PRESCRIPTION`/`MEDICAL_REPORT`/`LAB_RESULT`/`OTHER`) et notes. |
+
+**Champs interdits** (`422`) : `items`, `contract_uid`, `subscription_id`/`subscription_uid`, `covered_person_*`, `service_date`, `amount_claimed`, `coverage_type_code`, `consent_ref`, `service_execution_uid` (singulier).
+
+Erreurs exécutions : `EXECUTION_NOT_FOUND`, `EXECUTION_NOT_BILLABLE` (statut ≠ `recorded`), `EXECUTION_PROVIDER_MISMATCH`, `EXECUTION_SCOPE_MISMATCH`, `EXECUTION_ALREADY_CLAIMED` (`409` — une exécution n'est rattachable qu'à un seul claim). À la soumission les exécutions passent `claimed` ; annuler le brouillon les libère en `recorded`.
+
 Si la vérification finale refuse, aucun claim n'est créé et l'API retourne `422`. Si le claim est accepté, Azurance réserve la part assureur sur les plafonds.
 
 ### Identifiants référentiels (`reference_status`)
 
-Chaque ligne est contrôlée contre les référentiels cliniques : les uid inexistants (`medical_act_uid`, `medication_product_uid`, `prescription_line_uid`) rejettent le brouillon en `422`, tandis que les codes inconnus (`medical_act_code`, `medication_code`…) produisent des `warnings` `UNKNOWN_REFERENCE_CODE` — non bloquants, sauf pour les actes sous un plan à règles par acte (rejet, revérifié à la soumission). Chaque ligne expose `item_type` (dérivé de la prescription) et `reference_status` (`VERIFIED`/`UNKNOWN`/`NONE`).
+Les identifiants cliniques sont déclarés sur les **items des service executions** : les uid inexistants (`medical_act_uid`, `medication_product_uid`, `prescription_line_uid`) rejettent en `422`, tandis que les codes inconnus (`medical_act_code`, `medication_code`…) produisent des `warnings` `UNKNOWN_REFERENCE_CODE` — non bloquants, sauf pour les actes sous un plan à règles par acte (rejet, revérifié à la soumission). Chaque ligne expose `item_type` (dérivé) et `reference_status` (`VERIFIED`/`UNKNOWN`/`NONE`).
 
-### Couverture par ligne de facture
+### Couverture par ligne
 
-Chaque `items[]` peut porter son propre `coverage_type_code` (voir `GET /api/v1/reference/coverage-types` pour le référentiel). Le code au niveau de la requête sert de défaut pour les lignes sans code — pour une facture multi-couvertures, il peut être omis. Champs utiles par ligne : `coverage_type_code`, `prior_authorization_uid`, `prescription_uid` + `prescription_line_uid`, `internal_order`, `medical_act_uid`/`medical_act_code`/`category`/`chapter`, `medication_product_uid`, `medication_code`, `presentation_uid`, `prescribed_quantity`/`dispensed_quantity`, `sessions_performed`, `substitution_reason`, `batch_number`.
+Chaque `items[]` d'une service execution peut porter son propre `coverage_type_code` (voir `GET /api/v1/reference/coverage-types`). Le claim regroupe naturellement des lignes multi-couvertures quand les exécutions diffèrent. Champs utiles par ligne d'exécution : `coverage_type_code`, `prescription_uid` + `prescription_line_uid`, `internal_order`, `medical_act_uid`/`medical_act_code`/`category`/`chapter`, `medication_product_uid`, `medication_code`, `presentation_uid`, `prescribed_quantity`/`dispensed_quantity`, `sessions_performed`, `substitution_reason`, `batch_number`.
 
 Règles :
 
@@ -276,8 +271,7 @@ Les couvertures à ledger (`PHARMACY_DRUG`, `LAB_ANALYSIS`, `KINE_SESSION`, `OPT
 
 Règles : `code` + `prescriber_name` obligatoires ; `line_type`/`quantity` dérivés de la couverture ; items groupés par prescripteur dans une même ordonnance ; `encounter_uid` optionnel (sinon encounter créé) ; mutuellement exclusif avec les refs prescription ; **réservé aux types prescripteurs** `HOSPITAL`/`CLINIC`/`SPECIALIST` — `PHARMACY`/`LABORATORY` rejetés `403 INTERNAL_ORDER_NOT_ALLOWED` (le contrôle couvre aussi toute auto-prescription détectée, quel que soit le chemin de création). La ligne est flaguée `metadata.internal_order: true` (dérivé, visible par l'assureur).
 
-- Avec `service_execution_uid`, chaque ligne facturée doit correspondre à un item de l'exécution (couverture + montant — `422 EXECUTION_MISMATCH`).
-- Une ligne à PA obligatoire sans `prior_authorization_uid` passe `PENDING_AUTHORIZATION` : le claim est créé en `UNDER_REVIEW` et l'approbation assureur est bloquée jusqu'à couverture par une PA approuvée. Le prestataire peut créer la PA après coup via `POST /api/v1/prior-authorizations` avec `claim_item_uids` (les `uid` des lignes en attente).
+- Une ligne à PA obligatoire dans un claim sans `prior_authorization_uid` passe `PENDING_AUTHORIZATION` : le claim est créé en `UNDER_REVIEW` et l'approbation assureur est bloquée jusqu'à couverture par une PA approuvée. Le prestataire peut créer la PA après coup via `POST /api/v1/prior-authorizations` avec `claim_item_uids` (les `uid` des lignes en attente).
 
 Statuts claim : `SUBMITTED`, `UNDER_REVIEW`, `INFO_NEEDED`, `APPROVED`, `REJECTED`, `PAID`.
 
