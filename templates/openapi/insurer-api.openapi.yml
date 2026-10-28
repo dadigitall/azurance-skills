@@ -8832,9 +8832,6 @@ paths:
                 provider_uuid:
                   type: string
                   maxLength: 100
-                insured_uid:
-                  type: string
-                  maxLength: 36
               required:
               - subject
             example:
